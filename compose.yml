@@ -1,8 +1,33 @@
 version: "3"
 services:
-  go:
+  auth:
     build: 
       context: .
     tty: true
     volumes:
-      - ./src:/go/src
+      - ./src/services/auth:/go/src
+    ports:
+      - 8000:8000
+  db:
+    image: mysql:8.0
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql/logs:/var/log/mysql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql/init.sql:/init.sql
+    environment:
+      - MYSQL_DATABASE=ctf
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=user
+      - MYSQL_ROOT_PASSWORD=root
+      - TZ=Asia/Tokyo
+    ports:
+      - 3306:3306
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+    volumes:
+      - "./redis/data:/data"
+      - "./redis/redis.conf:/usr/local/etc/redis/redis.conf"
+  
