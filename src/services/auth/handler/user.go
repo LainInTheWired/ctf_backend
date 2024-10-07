@@ -2,8 +2,10 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/LainInTheWired/ctf_backend/user/model"
 	"github.com/LainInTheWired/ctf_backend/user/service"
@@ -43,13 +45,15 @@ func (h UserHandler) Signup(c echo.Context) error {
 	// リクエストから構造体にデータをコピー
 	var req SignupRequest
 	if err := c.Bind(&req); err != nil {
-		we := rapErrorPrint("request fail", err)
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": getSecondLastErrorMessage(we)})
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	// データをバリデーションにかける
 	if err := c.Validate(req); err != nil {
-		we := rapErrorPrint("request fail", err)
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": getSecondLastErrorMessage(we)})
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	// serviceロジックに入る
 	user := model.User{
@@ -58,7 +62,9 @@ func (h UserHandler) Signup(c echo.Context) error {
 		Password: req.Password,
 	}
 	if err := h.serv.Signup(user); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	return c.JSON(http.StatusCreated, map[string]string{"message": "Service registered successfully"})
 }
@@ -68,14 +74,16 @@ func (h UserHandler) Login(c echo.Context) error {
 
 	// リクエストから構造体にデータをコピー
 	if err := c.Bind(&req); err != nil {
-		we := rapErrorPrint("request fail", err)
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": getSecondLastErrorMessage(we)})
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 
 	// データをバリデーションにかける
 	if err := c.Validate(req); err != nil {
-		we := rapErrorPrint("failed to login user", err)
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": getSecondLastErrorMessage(we)})
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 
 	// model Userに移し替え
@@ -85,18 +93,31 @@ func (h UserHandler) Login(c echo.Context) error {
 	}
 
 	// serviceの処理
-	user, err := h.serv.Login(u)
-
+	id, err := c.Cookie("session")
+	if err == nil {
+		h.serv.CheckSession(id.Value)
+		return c.JSON(http.StatusAccepted, map[string]string{"message": "already login"})
+	}
+	//
+	sessionID, err := h.serv.Login(u)
 	if err != nil {
-		we := rapErrorPrint("", err)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": getSecondLastErrorMessage(we)})
-	}
-	res := LoginResponse{
-		Name:  user.Name,
-		Email: user.Email,
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 
-	return c.JSON(http.StatusAccepted, map[string]interface{}{"message": "Login Successful", "user": res})
+	cookie := new(http.Cookie)
+	cookie.Name = "session"
+	cookie.Value = sessionID
+	cookie.Expires = time.Now().Add(24 * time.Hour)
+	c.SetCookie(cookie)
+
+	// res := LoginResponse{
+	// 	Name:  user.Name,
+	// 	Email: user.Email,
+	// }
+
+	return c.JSON(http.StatusAccepted, map[string]interface{}{"message": "Login Successful"})
 }
 
 func getRootWrappedError(err error) error {

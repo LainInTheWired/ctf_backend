@@ -51,7 +51,7 @@ func (u userRepository) CreateUser(user model.User) error {
 func (u userRepository) GetUserByEmail(email string) (model.User, error) {
 	var user model.User
 	//  emailよりユーザ情報を取得
-	if err := u.DB.QueryRow("SELECT id,name,email FROM users WHERE email = ?", email).Scan(&user.Id, &user.Name, &user.Email); err != nil {
+	if err := u.DB.QueryRow("SELECT id,name,email,password FROM users WHERE email = ?", email).Scan(&user.Id, &user.Name, &user.Email, &user.Password); err != nil {
 		if err == sql.ErrNoRows {
 			return model.User{}, xerrors.Errorf(": %w", err)
 		}

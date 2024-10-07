@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -12,8 +13,12 @@ import (
 	"github.com/LainInTheWired/ctf_backend/user/repository"
 	"github.com/LainInTheWired/ctf_backend/user/service"
 	"github.com/go-playground/validator/v10"
+	"github.com/gorilla/sessions"
+	"github.com/redis/go-redis/v9"
+	"golang.org/x/xerrors"
 
 	// 正しいモジュールパス
+	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoLog "github.com/labstack/gommon/log" // エイリアスを付ける
@@ -59,32 +64,49 @@ func NewDBClient() (*sql.DB, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
 	return db, nil
 }
 
-// func NewRedisClient() {
-// 	db := redis.NewClient(&redis.Options{
-// 		Addr:     "redis:6379",
-// 		Password: "user",
-// 		DB:       0,
-// 	})
-// }
+func NewRedisClient() (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379",
+		Password: "user",
+		DB:       0,
+	})
+	// 接続確認
+	ctx := context.Background()
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+
+}
 
 func main() {
 	db, err := NewDBClient()
 	if err != nil {
-		log.Fatal(err.Error())
+		xerrors.Errorf("mysql connection error: %w", err.Error())
 	}
-	e := echo.New()
 
+	reddb, err := NewRedisClient()
+	if err != nil {
+		xerrors.Errorf("redis connetciono error: %w", err.Error())
+	}
+
+	e := echo.New()
+	// セッション
+	e.Use(session.Middleware(sessions.NewCookieStore([]byte("secret"))))
+
+	// ログの表示方式の切り替え
 	env := os.Getenv("ENV")
 	if env == "" {
 		env = "development"
 	}
-
 	// ログフォーマットの設定
 	if env == "production" {
 		// 本番環境ではJSON形式のログを出力
@@ -101,8 +123,10 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Validator = NewValidator()
 
-	mod := repository.NewUserRepository(db)
-	s := service.NewUserService(mod)
+	usrep := repository.NewUserRepository(db)
+	rerep := repository.NewRedisClient(reddb, context.Background())
+
+	s := service.NewUserService(usrep, rerep)
 	h := handler.NewHanderSignup(s)
 
 	e.GET("/", hello)
@@ -111,6 +135,7 @@ func main() {
 
 	e.Start(":8000")
 }
+
 func hello(c echo.Context) error {
 	return c.String(http.StatusOK, "Hello, World!")
 }
