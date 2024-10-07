@@ -27,3 +27,6 @@ go.work.sum
 #mysql
 mysql/*
 !mysql/my.conf
+
+redis/*
+!redis/redis.conf
