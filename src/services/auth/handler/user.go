@@ -11,6 +11,7 @@ import (
 	"github.com/LainInTheWired/ctf_backend/user/service"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/xerrors"
 )
 
@@ -95,8 +96,17 @@ func (h UserHandler) Login(c echo.Context) error {
 	// serviceの処理
 	id, err := c.Cookie("session")
 	if err == nil {
-		h.serv.CheckSession(id.Value)
-		return c.JSON(http.StatusAccepted, map[string]string{"message": "already login"})
+		_, err := h.serv.CheckSession(id.Value)
+		if err == nil {
+			return c.JSON(http.StatusAccepted, map[string]string{"message": "already login"})
+		} else if errors.Is(err, redis.Nil) {
+
+		} else {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			fmt.Println(redis.Nil == err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		}
 	}
 	//
 	sessionID, err := h.serv.Login(u)
@@ -118,6 +128,17 @@ func (h UserHandler) Login(c echo.Context) error {
 	// }
 
 	return c.JSON(http.StatusAccepted, map[string]interface{}{"message": "Login Successful"})
+}
+
+func (h UserHandler) Logout(c echo.Context) error {
+	// serviceの処理
+	id, err := c.Cookie("session")
+	if err != nil {
+		h.serv.CheckSession(id.Value)
+		return c.JSON(http.StatusAccepted, map[string]string{"message": "already login"})
+	}
+	return c.JSON(http.StatusAccepted, map[string]string{"message": "Successfuly Logout"})
+
 }
 
 func getRootWrappedError(err error) error {

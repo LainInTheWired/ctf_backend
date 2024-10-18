@@ -1,0 +1,427 @@
+package service
+
+import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+
+	"golang.org/x/xerrors"
+)
+
+type pveService struct {
+	pve        *PVEClient
+	HTTPClient *http.Client
+}
+
+type PVEService interface {
+	CloneVM(name string, id string, node string) error
+	GetVM(string) (*VMConfig, error)
+	EditVM(vmconfig VMConfig) error
+	GetNodeList() ([]int, error)
+}
+
+// ProxmoxClient はProxmox APIとのやり取りを管理します
+type PVEClient struct {
+	Config     PVEConfig
+	HTTPClient *http.Client
+}
+
+// ProxmoxConfig はProxmoxへの接続設定を保持します
+type PVEConfig struct {
+	APIURL        string
+	Authorization string
+}
+
+// VMConfig は作成するVMの設定を保持します
+//	type VMConfig struct {
+//		VMID           string `json:"vmid"`
+//		Name           string `json:"name"`
+//		Memory         string `json:"memory"` // MB単位
+//		CPUs           string `json:"cores"`
+//		Net0           string `json:"net0"`        // 例: "virtio=DE:AD:BE:EF:00:00,bridge=vmbr0"
+//		Scsi0          string `json:"scsi0"`       // 例: "kingston_1tb:vm-200-disk-0,size=16G"
+//		Boot           string `json:"boot"`        // 例: "c"
+//		Ide2           string `json:"ide2"`        // 例: "local:iso/AlmaLinux-9.3-x86_64-boot.iso"
+//		OSType         string `json:"ostype"`      // 例: "l26" (Linux 2.6/3.x/4.x)
+//		SCSIController string `json:"scsihw"`      // 例: "virtio-scsi-single"
+//		Description    string `json:"description"` // VMの説明（オプション）
+//	}
+
+type VMConfig struct {
+	Sockets    int    `json:"sockets"`
+	Net0       string `json:"net0"`
+	Serial0    string `json:"serial0"`
+	Scsi0      string `json:"scsi0"`
+	Agent      string `json:"agent"`
+	Vmgenid    string `json:"vmgenid"`
+	Meta       string `json:"meta"`
+	Digest     string `json:"digest"`
+	Ide2       string `json:"ide2"`
+	CPU        string `json:"cpu"`
+	Name       string `json:"name"`
+	Nameserver string `json:"nameserver"`
+	IPConfig0  string `json:"ipconfig0"`
+	CiCustom   string `json:"cicustom"`
+	Cores      int    `json:"cores"`
+	Boot       string `json:"boot"`
+	VGA        string `json:"vga"`
+	NUMA       int    `json:"numa"`
+	SMBIOS1    string `json:"smbios1"`
+	Memory     string `json:"memory"`
+	ScsiHW     string `json:"scsihw"`
+}
+
+type NodeList struct {
+	vmid   string
+	name   string
+	status string
+}
+
+type ResponsePVE[T any] struct {
+	Data   T                 `json:"data"`
+	Errors map[string]string `json:"errors,omitempty"`
+}
+
+// NewProxmoxClient は新しいProxmoxClientを初期化します
+func NewPVEClient(config PVEConfig) *PVEClient {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番環境ではfalseに設定してください
+	}
+	return &PVEClient{
+		Config:     config,
+		HTTPClient: &http.Client{Transport: tr},
+	}
+}
+
+func NewPVEService(conf *PVEClient, client *http.Client) PVEService {
+	return &pveService{
+		pve:        conf,
+		HTTPClient: client,
+	}
+}
+func (s *pveService) GetNodeList() ([]int, error) {
+	endpoint := fmt.Sprintf("%s/nodes", s.pve.Config.APIURL)
+
+	formData := url.Values{}
+
+	req, err := http.NewRequest("GET", endpoint, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return nil, xerrors.Errorf("can't create http request: %w", err)
+	}
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエスト内容のログ出力
+	log.Println("---- HTTP Request ----")
+	log.Printf("Method: %s\n", req.Method)
+	log.Printf("URL: %s\n", req.URL.String())
+	log.Println("Headers:")
+	for name, values := range req.Header {
+		for _, value := range values {
+			log.Printf("  %s: %s\n", name, value)
+		}
+	}
+	log.Println("----------------------")
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return nil, xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+	log.Printf("Response Body: %s\n", string(body))
+
+	// json.Unmarshalでデコード
+	var pveresp ResponsePVE[[]NodeList]
+
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return nil, xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// レスポンスのログ出力
+	log.Println("---- HTTP Response ----")
+	log.Printf("Status: %s\n", resp.Status)
+	log.Println("Headers:")
+	for name, values := range resp.Header {
+		for _, value := range values {
+			log.Printf("  %s: %s\n", name, value)
+		}
+	}
+	log.Printf("Response Body: %s\n", string(body))
+	log.Printf("Parsed Body: %+v\n", pveresp) // ここでパースされたデータをログ出力
+	log.Println("-----------------------")
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return nil, xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
+
+	return []int{}, nil
+}
+
+// func (s *pveService) GetNodeList() ([]int, error) {
+// 	endpoint := fmt.Sprintf("%s/nodes", s.pve.Config.APIURL)
+
+// 	formData := url.Values{}
+
+// 	req, err := http.NewRequest("GET", endpoint, bytes.NewBufferString(formData.Encode()))
+// 	if err != nil {
+// 		return nil, xerrors.Errorf("can't create http request: %w", err)
+// 	}
+// 	// ヘッダーの設定
+// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+// 	req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s", s.pve.Config.Authorization))
+
+// 	// リクエスト内容のログ出力
+// 	log.Println("---- HTTP Request ----")
+// 	log.Printf("Method: %s\n", req.Method)
+// 	log.Printf("URL: %s\n", req.URL.String())
+// 	log.Println("Headers:")
+// 	for name, values := range req.Header {
+// 		for _, value := range values {
+// 			log.Printf("  %s: %s\n", name, value)
+// 		}
+// 	}
+// 	log.Println("----------------------")
+
+// 	resp, err := s.pve.HTTPClient.Do(req)
+// 	if err != nil {
+// 		return nil, xerrors.Errorf("fail http request: %w", err)
+// 	}
+// 	defer resp.Body.Close()
+
+// 	body, err := ioutil.ReadAll(resp.Body)
+// 	if err != nil {
+// 		log.Fatalf("Error reading clone response body: %v", err)
+// 	}
+// 	log.Printf("Response Body: %s\n", string(body))
+
+// 	// json.Unmarshalでデコード
+// 	var pveresp ResponsePVE[[]NodeList]
+
+// 	if err := json.Unmarshal(body, &pveresp); err != nil {
+// 		return nil, xerrors.Errorf("can't unmarshal response body: %w", err)
+// 	}
+
+// 	// レスポンスのログ出力
+// 	log.Println("---- HTTP Response ----")
+// 	log.Printf("Status: %s\n", resp.Status)
+// 	log.Println("Headers:")
+// 	for name, values := range resp.Header {
+// 		for _, value := range values {
+// 			log.Printf("  %s: %s\n", name, value)
+// 		}
+// 	}
+// 	log.Printf("Response Body: %s\n", string(body))
+// 	log.Printf("Parsed Body: %+v\n", pveresp) // ここでパースされたデータをログ出力
+// 	log.Println("-----------------------")
+
+// 	// エラーチェック
+// 	if resp.StatusCode >= 400 {
+// 		return nil, xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+// 	}
+
+// 	// クローン作成のUPIDを表示
+// 	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
+
+// 	return []int{}, nil
+// }
+
+func (s *pveService) EditVM(vmconfig VMConfig) error {
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%s/config", s.pve.Config.APIURL, "PVE01", "200")
+	formData := url.Values{}
+	formData.Set("cores", "2")
+	// formData.Set("ipconfig0")
+
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// vmconf, err := s.GetVM(200)
+	// if err != nil {
+	// 	return xerrors.Errorf("get vm error: %w", err)
+	// }
+
+	// リクエスト内容のログ出力
+	log.Println("---- HTTP Request ----")
+	log.Printf("Method: %s\n", req.Method)
+	log.Printf("URL: %s\n", req.URL.String())
+	log.Println("Headers:")
+	for name, values := range req.Header {
+		for _, value := range values {
+			log.Printf("  %s: %s\n", name, value)
+		}
+	}
+	log.Printf("Body: %s\n", formData.Encode())
+	log.Println("----------------------")
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp ResponsePVE[VMConfig]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// レスポンスのログ出力
+	log.Println("---- HTTP Response ----")
+	log.Printf("Status: %s\n", resp.Status)
+	log.Println("Headers:")
+	for name, values := range resp.Header {
+		for _, value := range values {
+			log.Printf("  %s: %s\n", name, value)
+		}
+	}
+	log.Printf("Response Body: %s\n", string(body))
+	log.Printf("Parsed Body: %+v\n", pveresp) // ここでパースされたデータをログ出力
+	log.Println("-----------------------")
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
+
+	return nil
+}
+
+func (s *pveService) GetVM(id string) (*VMConfig, error) {
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%s/config", s.pve.Config.APIURL, "PVE01", id)
+	formData := url.Values{}
+
+	req, err := http.NewRequest("GET", endpoint, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return nil, xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return nil, xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return nil, xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	var getVMconfig ResponsePVE[VMConfig]
+
+	err = json.Unmarshal([]byte(body), &getVMconfig)
+	if err != nil {
+		return nil, xerrors.Errorf("json Unmarshal error: %w", err)
+	}
+	fmt.Println(getVMconfig)
+
+	return &getVMconfig.Data, nil
+}
+
+func (s *pveService) CloneVM(name string, id string, node string) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%s/clone", s.pve.Config.APIURL, "PVE01", "9002")
+
+	// フォームデータの作成
+	formData := url.Values{}
+	formData.Set("name", name)
+	formData.Set("newid", id)
+	formData.Set("node", node)
+	formData.Set("full", "1")
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエスト内容のログ出力
+	log.Println("---- HTTP Request ----")
+	log.Printf("Method: %s\n", req.Method)
+	log.Printf("URL: %s\n", req.URL.String())
+	log.Println("Headers:")
+	for name, values := range req.Header {
+		for _, value := range values {
+			log.Printf("  %s: %s\n", name, value)
+		}
+	}
+	log.Printf("Body: %s\n", formData.Encode())
+	log.Println("----------------------")
+
+	// リクエストの送信
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp ResponsePVE[VMConfig]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// レスポンスのログ出力
+	log.Println("---- HTTP Response ----")
+	log.Printf("Status: %s\n", resp.Status)
+	log.Println("Headers:")
+	for name, values := range resp.Header {
+		for _, value := range values {
+			log.Printf("  %s: %s\n", name, value)
+		}
+	}
+	log.Printf("Response Body: %s\n", string(body))
+	log.Printf("Parsed Body: %+v\n", pveresp) // ここでパースされたデータをログ出力
+	log.Println("-----------------------")
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
+
+	return nil
+}

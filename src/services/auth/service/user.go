@@ -84,3 +84,11 @@ func (s *userService) GetSession(sessionID string) (string, error) {
 	}
 	return r, nil
 }
+
+func (s *userService) Logout(sessionID string) error {
+	err := s.rerepo.Delete(sessionID)
+	if err != nil {
+		return xerrors.Errorf("redis can't delete key: %w", err)
+	}
+	return nil
+}

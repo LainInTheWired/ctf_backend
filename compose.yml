@@ -5,9 +5,20 @@ services:
       context: .
     tty: true
     volumes:
-      - ./src/services/auth:/go/src
+      - ./src/services/auth:/go/src/auth
+      - ./src/shared:/go/src/shared
     ports:
       - 8000:8000
+  pveapi:
+    build: 
+      context: .
+    tty: true
+    volumes:
+      - ./src/services/pveapi:/go/src/pveapi
+      - ./src/shared:/go/src/shared
+    ports:
+      - 8001:8000
+
   db:
     image: mysql:8.0
     volumes:

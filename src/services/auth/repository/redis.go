@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/xerrors"
 )
 
 type RedisRepository interface {
@@ -26,32 +27,21 @@ func NewRedisClient(cli *redis.Client, ctx context.Context) RedisRepository {
 }
 
 func (r *redisRepository) Set(key string, value interface{}, expiration time.Duration) error {
-	return r.cli.Set(r.ctx, key, value, expiration).Err()
+	err := r.cli.Set(r.ctx, key, value, expiration).Err()
+	if err != nil {
+		return xerrors.Errorf("redis can't set: %w")
+	}
+	return nil
 }
 
 func (r *redisRepository) Get(key string) (string, error) {
-	return r.cli.Get(r.ctx, key).Result()
+	s, err := r.cli.Get(r.ctx, key).Result()
+	if err != nil {
+		return "", xerrors.Errorf("error set redis: %w", err)
+	}
+	return s, nil
 }
 
 func (r *redisRepository) Delete(key string) error {
-	return r.cli.Del(r.ctx, key).Err()
+	return xerrors.Errorf("error delete redis: %w", r.cli.Del(r.ctx, key).Err())
 }
-
-// func (r redisRepository) SetSettion(s model.Session) error {
-// 	sessionData := map[string]interface{}{
-// 		"user_id":    s.UserID,
-// 		"created_at": s.CreatedAt,
-// 	}
-// 	err := r.red.HSet(r.ctx, s.SessionID, sessionData).Err()
-// 	if err != nil {
-// 		return xerrors.Errorf("redis don't set sessionID: %w", err)
-// 	}
-
-// 	// セッションの有効期限を30分に設定
-// 	err = r.red.Expire((r.ct, sessionKey, 30*time.Minute).Err()
-// 	if err != nil {
-// 		return xerrors.Errorf("redis don't set limit time: %w", err)
-// 	}
-
-// 	return nil
-// }

@@ -25,8 +25,8 @@ go.work.sum
 .env
 
 #mysql
-mysql/*
+/mysql/*
 !mysql/my.conf
 
-redis/*
+/redis/*
 !redis/redis.conf

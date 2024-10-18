@@ -3,16 +3,15 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
+	myvalidator "github.com/LainInTheWired/ctf_backend/shared/pkg/validator"
 	"github.com/LainInTheWired/ctf_backend/user/handler" // 正しいモジュールパス
 	"github.com/LainInTheWired/ctf_backend/user/repository"
 	"github.com/LainInTheWired/ctf_backend/user/service"
-	"github.com/go-playground/validator/v10"
+
 	"github.com/gorilla/sessions"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/xerrors"
@@ -23,41 +22,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	echoLog "github.com/labstack/gommon/log" // エイリアスを付ける
 )
-
-// CustomValidator
-type CustomValidator struct {
-	validator *validator.Validate
-}
-
-// NewValidator
-func NewValidator() echo.Validator {
-	return &CustomValidator{validator: validator.New()}
-}
-
-// カスタムヴァリデータを編集
-func (cv *CustomValidator) Validate(i interface{}) error {
-	err := cv.validator.Struct(i)
-	if err != nil {
-		var errorMessages []string
-		for _, err := range err.(validator.ValidationErrors) {
-			fmt.Println(err)
-			fieldName := strings.ToLower(err.Field())
-			switch err.Tag() {
-			case "required":
-				errorMessages = append(errorMessages, fmt.Sprintf("%s is required", fieldName))
-			case "email":
-				errorMessages = append(errorMessages, fmt.Sprintf("%s isn't email format.", fieldName))
-			case "min":
-				errorMessages = append(errorMessages, fmt.Sprintf("%s must be at least %s characters long.", fieldName, err.Param()))
-			default:
-				errorMessages = append(errorMessages, fmt.Sprintf("%s is fail validation", fieldName))
-			}
-		}
-		return fmt.Errorf(strings.Join(errorMessages, ", "))
-	}
-	return nil
-
-}
 
 func NewDBClient() (*sql.DB, error) {
 	db, err := sql.Open("mysql", "user:user@tcp(db:3306)/ctf")
@@ -84,19 +48,21 @@ func NewRedisClient() (*redis.Client, error) {
 		return nil, err
 	}
 	return client, nil
-
 }
 
 func main() {
+	// mysql初期化処理
 	db, err := NewDBClient()
 	if err != nil {
 		xerrors.Errorf("mysql connection error: %w", err.Error())
 	}
+	defer db.Close()
 
 	reddb, err := NewRedisClient()
 	if err != nil {
 		xerrors.Errorf("redis connetciono error: %w", err.Error())
 	}
+	defer reddb.Close()
 
 	e := echo.New()
 	// セッション
@@ -121,7 +87,7 @@ func main() {
 	// アクセスログを出力
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Validator = NewValidator()
+	e.Validator = myvalidator.NewValidator()
 
 	usrep := repository.NewUserRepository(db)
 	rerep := repository.NewRedisClient(reddb, context.Background())
@@ -132,6 +98,7 @@ func main() {
 	e.GET("/", hello)
 	e.POST("/signup", h.Signup)
 	e.POST("/login", h.Login)
+	e.DELETE("/logout", h.Logout)
 
 	e.Start(":8000")
 }

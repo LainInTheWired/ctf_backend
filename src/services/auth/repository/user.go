@@ -27,7 +27,7 @@ func NewUserRepository(db *sql.DB) UserRepository {
 func (u userRepository) CreateUser(user model.User) error {
 	// emailが登録されているかチェック
 	if _, err := u.GetUserByEmail(user.Email); err == nil {
-		return xerrors.Errorf(": %w", err)
+		return xerrors.Errorf("already regist email: %w", err)
 	}
 	// usersテーブルにinsertさせる
 	hashPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
