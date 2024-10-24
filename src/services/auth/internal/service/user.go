@@ -6,15 +6,19 @@ import (
 
 	"github.com/LainInTheWired/ctf_backend/user/model"
 	"github.com/LainInTheWired/ctf_backend/user/repository"
+	"github.com/cockroachdb/errors"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/xerrors"
 )
 
 type UserService interface {
 	Signup(model.User) error
 	Login(u model.User) (string, error)
-	CheckSession(sessionID string) (string, error)
+	CheckSession(string) (string, error)
+	AddRole(*model.Role) (int, error)
+	AddPermission(*model.Permission) error
+	BindRolePermissions(int, int) error
+	BindUserRoles(uid int, rid int) error
 }
 type userService struct {
 	usrepo repository.UserRepository
@@ -31,7 +35,7 @@ func NewUserService(userrepository repository.UserRepository, redisrepository re
 func (s *userService) Signup(u model.User) error {
 	// モデルの構造体に移し替えてから、repositoryに渡す
 	if err := s.usrepo.CreateUser(u); err != nil {
-		return xerrors.Errorf(": %w", err)
+		return errors.Wrap(err, "can't create user")
 	}
 	return nil
 }
@@ -39,14 +43,15 @@ func (s *userService) Signup(u model.User) error {
 func (s *userService) Login(u model.User) (string, error) {
 	getUser, err := s.usrepo.GetUserByEmail(u.Email)
 	if err != nil {
-		return "", xerrors.Errorf(": %w", err)
+		return "", errors.Wrap(err, "can't get user by email")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(getUser.Password), []byte(u.Password)); err != nil {
-		return "", xerrors.Errorf("authentication failed: %w", err)
+		return "", errors.Wrap(err, "authentication failed")
+
 	}
-	sessionID, err := NewSession(getUser.Id, s)
+	sessionID, err := NewSession(getUser.ID, s)
 	if err != nil {
-		return "", xerrors.Errorf("authentication failed: %w", err)
+		return "", errors.Wrap(err, "authentication failed")
 	}
 	return sessionID, nil
 }
@@ -54,7 +59,7 @@ func (s *userService) Login(u model.User) (string, error) {
 func (s *userService) CheckSession(sessionID string) (string, error) {
 	sessionData, err := s.rerepo.Get(sessionID)
 	if err != nil {
-		return "", xerrors.Errorf(": %w", err)
+		return "", errors.Wrap(err, "can't get sessionID")
 	}
 
 	return sessionData, nil
@@ -72,7 +77,7 @@ func NewSession(userID int, s *userService) (string, error) {
 
 	err := s.rerepo.Set(sessionID, uid, time.Hour)
 	if err != nil {
-		return "", xerrors.Errorf("redis can't set sesstionID: %w", err)
+		return "", errors.Wrap(err, "redis can't set sesstionID")
 	}
 	return sessionID, nil
 }
@@ -80,15 +85,44 @@ func NewSession(userID int, s *userService) (string, error) {
 func (s *userService) GetSession(sessionID string) (string, error) {
 	r, err := s.rerepo.Get(sessionID)
 	if err != nil {
-		return "", xerrors.Errorf("redis can't get : %w", err)
+		return "", errors.Wrap(err, "redis can't get")
+
 	}
 	return r, nil
+}
+func (s *userService) AddRole(role *model.Role) (int, error) {
+	rid, err := s.usrepo.CreateRole(role)
+	if err != nil {
+		return 0, errors.Wrap(err, "can't insert roles")
+	}
+	return rid, nil
+}
+func (s *userService) BindRolePermissions(rid int, pid int) error {
+	err := s.usrepo.BindRolePermissions(rid, pid)
+	if err != nil {
+		return errors.Wrap(err, "can't bind role permission")
+	}
+	return nil
+}
+func (s *userService) BindUserRoles(uid int, rid int) error {
+	err := s.usrepo.BindUserRoles(uid, rid)
+	if err != nil {
+		return errors.Wrap(err, "can't bind user roles")
+	}
+	return nil
+}
+func (s *userService) AddPermission(permission *model.Permission) error {
+	err := s.usrepo.CreatePermission(permission)
+	if err != nil {
+		return errors.Wrap(err, "can't insert roles")
+	}
+	return nil
 }
 
 func (s *userService) Logout(sessionID string) error {
 	err := s.rerepo.Delete(sessionID)
 	if err != nil {
-		return xerrors.Errorf("redis can't delete key: %w", err)
+		return errors.Wrap(err, "redis can't delete key")
 	}
 	return nil
 }

@@ -98,6 +98,11 @@ func main() {
 	e.GET("/", hello)
 	e.POST("/signup", h.Signup)
 	e.POST("/login", h.Login)
+	e.POST("/createrole", h.CreateRole)
+	e.POST("/createpermission", h.CreatePermission)
+	e.POST("/bindpermission", h.BindRolePermissions)
+	e.POST("/bindrole", h.BindUserRoles)
+
 	e.DELETE("/logout", h.Logout)
 
 	e.Start(":8000")

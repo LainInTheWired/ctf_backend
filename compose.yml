@@ -2,30 +2,38 @@ version: "3"
 services:
   auth:
     build: 
-      context: .
+      context: src/services/auth
     tty: true
     volumes:
       - ./src/services/auth:/go/src/auth
-      - ./src/shared:/go/src/shared
+      - ./src/shared:/go/src/auth/shared
     ports:
       - 8000:8000
+  gateway:
+    build: 
+      context: src/services/gateway
+    tty: true
+    volumes:
+      - ./src/services/gateway:/go/src/gateway
+      - ./src/shared:/go/src/gateway/shared
+    ports:
+      - 8002:8000
   pveapi:
     build: 
-      context: .
+      context: src/services/pveapi
     tty: true
     volumes:
       - ./src/services/pveapi:/go/src/pveapi
-      - ./src/shared:/go/src/shared
+      - ./src/shared:/go/src/pveapi/shared
     ports:
       - 8001:8000
-
   db:
     image: mysql:8.0
     volumes:
       - ./mysql/data:/var/lib/mysql
       - ./mysql/logs:/var/log/mysql
       - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
-      - ./mysql/init.sql:/init.sql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
       - MYSQL_DATABASE=ctf
       - MYSQL_USER=user

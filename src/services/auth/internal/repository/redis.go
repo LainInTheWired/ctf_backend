@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/xerrors"
 )
 
 type RedisRepository interface {
@@ -29,7 +29,7 @@ func NewRedisClient(cli *redis.Client, ctx context.Context) RedisRepository {
 func (r *redisRepository) Set(key string, value interface{}, expiration time.Duration) error {
 	err := r.cli.Set(r.ctx, key, value, expiration).Err()
 	if err != nil {
-		return xerrors.Errorf("redis can't set: %w")
+		return errors.Wrap(err, "redis can't set: %w")
 	}
 	return nil
 }
@@ -37,11 +37,11 @@ func (r *redisRepository) Set(key string, value interface{}, expiration time.Dur
 func (r *redisRepository) Get(key string) (string, error) {
 	s, err := r.cli.Get(r.ctx, key).Result()
 	if err != nil {
-		return "", xerrors.Errorf("error set redis: %w", err)
+		return "", errors.Wrap(err, "error set redis")
 	}
 	return s, nil
 }
 
 func (r *redisRepository) Delete(key string) error {
-	return xerrors.Errorf("error delete redis: %w", r.cli.Del(r.ctx, key).Err())
+	return errors.Wrap(r.cli.Del(r.ctx, key).Err(), "error delete redis")
 }
