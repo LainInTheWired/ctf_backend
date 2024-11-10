@@ -25,8 +25,37 @@ services:
     volumes:
       - ./src/services/pveapi:/go/src/pveapi
       - ./src/shared:/go/src/pveapi/shared
+      - ~/.ssh/id_ed25519:/ssh/id_ed25519
     ports:
       - 8001:8000
+  contest:
+    build: 
+      context: src/services/contest
+    tty: true
+    volumes:
+      - ./src/services/contest:/go/src/contest
+      - ./src/shared:/go/src/contest/shared
+    ports:
+      - 8003:8000
+  team:
+    build: 
+      context: src/services/team
+    tty: true
+    volumes:
+      - ./src/services/team:/go/src/team
+      - ./src/shared:/go/src/team/shared
+    ports:
+      - 8004:8000
+  question:
+    build: 
+      context: src/services/question
+    tty: true
+    volumes:
+      - ./src/services/question:/go/src/question
+      - ./src/shared:/go/src/question/shared
+    ports:
+      - 8005:8000
+
   db:
     image: mysql:8.0
     volumes:
@@ -49,4 +78,14 @@ services:
     volumes:
       - "./redis/data:/data"
       - "./redis/redis.conf:/usr/local/etc/redis/redis.conf"
+  nfs:
+    build: 
+      context: nfs
+    ports:
+      - "8888:80"
+    volumes:
+      - "./nfs/share:/share"
+      - "./nfs/exports:/etc/exports"
+    tty: true
+  
   

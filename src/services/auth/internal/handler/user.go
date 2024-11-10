@@ -250,7 +250,7 @@ func (h *UserHandler) BindUserRoles(c echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]string{"message": "success bind user roles"})
 }
 
-// func (h *UserHandler) BInd
+// func (h *UserHandler) Bind
 func (h *UserHandler) CreatePermission(c echo.Context) error {
 	var req CreatePermission
 

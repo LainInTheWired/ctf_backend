@@ -1,0 +1,7 @@
+package main
+
+import "github.com/LainInTheWired/ctf_backend/shared/pkg/validator"
+
+func main() {
+	validator.NewValidator()
+}

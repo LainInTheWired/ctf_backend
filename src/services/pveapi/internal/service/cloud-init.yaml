@@ -1,0 +1,13 @@
+'#cloud-config': '#cloud-config'
+hostname: my-hostname
+users:
+    - name: myuser
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      groups: sudo
+      shell: /bin/bash
+packages:
+    - git
+    - curl
+runcmd:
+    - echo "Hello, World!"
+    - systemctl restart ssh

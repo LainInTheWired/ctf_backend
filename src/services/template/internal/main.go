@@ -12,26 +12,24 @@ import (
 	"os"
 	"time"
 
-	"github.com/LainInTheWired/ctf-backend/pveapi/handler"
-	"github.com/LainInTheWired/ctf-backend/pveapi/model"
-	"github.com/LainInTheWired/ctf-backend/pveapi/repository"
-	"github.com/LainInTheWired/ctf-backend/pveapi/service"
 	myvalidator "github.com/LainInTheWired/ctf_backend/shared/pkg/validator"
-	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/xerrors"
+
+	_ "github.com/go-sql-driver/mysql" // 空のインポートを追加
+
 	"github.com/gorilla/sessions"
-	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
+
+	// 正しいモジュールパス
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	echoLog "github.com/labstack/gommon/log" // エイリアスを付ける
-	"github.com/redis/go-redis/v9"
-	"golang.org/x/xerrors"
 )
 
 // 認証ヘッダーを自動的に付与するカスタムクライアントを作成
 type MiddlewareTransport struct {
 	Transport http.RoundTripper
-	Token     string
 }
 
 type httpClientRequestLog struct {
@@ -48,7 +46,6 @@ type httpClinetResponseLog struct {
 
 // リクエストのたびに Authorization ヘッダーを自動で追加
 func (a *MiddlewareTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s", a.Token))
 	var reqbody []byte
 	if req.Body != nil {
 		reqbody, err := io.ReadAll(req.Body)
@@ -108,7 +105,6 @@ func NewRedisClient() (*redis.Client, error) {
 		DB:       0,
 	})
 	// 接続確認
-	// ctx := context.Background()
 	ctx := context.Background()
 	_, err := client.Ping(ctx).Result()
 	if err != nil {
@@ -118,12 +114,6 @@ func NewRedisClient() (*redis.Client, error) {
 }
 
 func main() {
-	// .envファイルを読み込む
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file")
-	}
-
 	// mysql初期化処理
 	db, err := NewDBClient()
 	if err != nil {
@@ -131,42 +121,12 @@ func main() {
 	}
 	defer db.Close()
 
-	// redis初期化処理
 	reddb, err := NewRedisClient()
 	if err != nil {
 		xerrors.Errorf("redis connetciono error: %w", err.Error())
 	}
 	defer reddb.Close()
 
-	// proxmoxapi初期化処理
-	config := &model.PVEConfig{
-		APIURL:        os.Getenv("PROXMOX_API_URL"),
-		Authorization: os.Getenv("PROXMOX_API_TOKEN"),
-	}
-	// httpclinet auth middleware
-	// カスタムトランスポートを作成
-	// カスタム Transport を設定（InsecureSkipVerify は本番環境では false に）
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番では false にする
-	}
-
-	// カスタム AuthTransport を作成
-	authTransport := &MiddlewareTransport{
-		Transport: tr,
-		Token:     config.Authorization,
-	}
-	// カスタム HTTP クライアントの作成
-	client := &http.Client{
-		Transport: authTransport,
-		Timeout:   60 * time.Second,
-	}
-
-	// 設定のバリデーション
-	if config.APIURL == "" || config.Authorization == "" {
-		log.Fatal("必要な環境変数が設定されていません。PROXMOX_API_URL および PROXMOX_AUTHORIZATION を設定してください。")
-	}
-
-	// echo初期化処理
 	e := echo.New()
 	// セッション
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte("secret"))))
@@ -192,18 +152,30 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Validator = myvalidator.NewValidator()
 
-	// p := service.NewPVEClient(config)
-	r := repository.NewPVERepository(config, client)
-	s := service.NewPVEService(r)
-	h := handler.NewPVEAPI(s)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番では false にする
+	}
+	// カスタム AuthTransport を作成
+	authTransport := &MiddlewareTransport{
+		Transport: tr,
+	}
+	// カスタム HTTP クライアントの作成
+	client := &http.Client{
+		Transport: authTransport,
+		Timeout:   60 * time.Second,
+	}
 
-	e.GET("/", hello)
-	e.POST("/createcloudinitvm", h.CreateCloudinitVM)
-	// e.GET("/vm", h.GetVM)
-	// e.PUT("/vm", h.GETTestHander)
-	// e.POST("/getnode", h.GetNodeTestHander)
-	// e.DELETE("/deletevm", h.DeleteVM)
-	// e.POST("/cloneque", h.CloneQuestions)
+	// mr := repository.NewMysqlRepository(db)
+	// pr := repository.NewPVEAPIRepository(client)
+
+	// s := service.NewContestService(pr, mr)
+	// h := hander.NewContestHander(s)
+
+	fmt.Println(client)
+	// e.POST("/contest", h.CreateContest)
+	// e.DELETE("/contest", h.DeleteContest)
+	// e.POST("/team_contests", h.JoinTeamsinContest)
+	// e.DELETE("/team_contests", h.DeleteTeamContest)
 
 	e.Start(":8000")
 }

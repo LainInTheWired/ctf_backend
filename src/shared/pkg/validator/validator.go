@@ -2,6 +2,7 @@ package validator
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -15,7 +16,32 @@ type CustomValidator struct {
 
 // NewValidator
 func NewValidator() echo.Validator {
-	return &CustomValidator{validator: validator.New()}
+	v := validator.New()
+
+	v.RegisterValidation("cidr", cidrValidation)
+	v.RegisterValidation("ip", ipValidation)
+
+	return &CustomValidator{validator: v}
+}
+
+// cidrValidation はCIDR形式を検証するカスタムバリデーション関数です
+func cidrValidation(fl validator.FieldLevel) bool {
+	s, ok := fl.Field().Interface().(string)
+	if !ok {
+		return false
+	}
+	_, _, err := net.ParseCIDR(s)
+	return err == nil
+}
+func ipValidation(fl validator.FieldLevel) bool {
+	s, ok := fl.Field().Interface().(string)
+	if !ok {
+		return false
+	}
+	// 単一のIPアドレスとして解析
+	ip := net.ParseIP(s)
+	return ip != nil
+
 }
 
 // カスタムヴァリデータを編集
@@ -33,6 +59,10 @@ func (cv *CustomValidator) Validate(i interface{}) error {
 				errorMessages = append(errorMessages, fmt.Sprintf("%s isn't email format.", fieldName))
 			case "min":
 				errorMessages = append(errorMessages, fmt.Sprintf("%s must be at least %s characters long.", fieldName, err.Param()))
+			case "cidr":
+				errorMessages = append(errorMessages, fmt.Sprintf("%s must be a valid CIDR (e.g., 0.0.0.0/24)", fieldName))
+			case "ip":
+				errorMessages = append(errorMessages, fmt.Sprintf("%s must be a valid IP (e.g., 0.0.0.0)", fieldName))
 			default:
 				errorMessages = append(errorMessages, fmt.Sprintf("%s is fail validation", fieldName))
 			}
