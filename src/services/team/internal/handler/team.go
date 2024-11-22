@@ -16,6 +16,7 @@ type TeamHander interface {
 	CreateTeam(c echo.Context) error
 	DeleteTeam(c echo.Context) error
 	ListTeamByContest(c echo.Context) error
+	ListTeamUserByContest(c echo.Context) error
 }
 
 type teamHander struct {
@@ -145,4 +146,22 @@ func (t *teamHander) JoinContest(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "Join contest_teams"))
+}
+
+func (t *teamHander) ListTeamUserByContest(c echo.Context) error {
+	sid := c.QueryParam("id")
+	id, err := strconv.Atoi(sid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+
+	teams, err := t.serv.ListTeamUsersByContest(id)
+
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	fmt.Printf("%+v", teams[0])
+	return c.JSON(http.StatusOK, teams)
 }

@@ -20,6 +20,7 @@ type ContestHander interface {
 	DeleteTeamContest(c echo.Context) error
 	ListContest(c echo.Context) error
 	ListContestByTeams(c echo.Context) error
+	StartContest(c echo.Context) error
 }
 
 type contestHander struct {
@@ -48,6 +49,9 @@ type listContestResponse struct {
 type joinContestQuesiontsRequest struct {
 	QID int `json:"qid"`
 	CID int `json:"cid"`
+}
+type startContestRequest struct {
+	contestID int `json:"contest_id"`
 }
 
 func NewContestHander(cr service.ContestService) ContestHander {
@@ -223,7 +227,6 @@ func (h *contestHander) JoinContestQuestions(c echo.Context) error {
 	for _, req := range *reqs {
 		t := map[string]int{"qid": req.QID, "cid": req.CID}
 		qcids = append(qcids, t)
-
 	}
 
 	if err := h.serv.JoinContestQuesionts(qcids); err != nil {
@@ -231,5 +234,28 @@ func (h *contestHander) JoinContestQuestions(c echo.Context) error {
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
+	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contests_quesions"))
+}
+
+func (h *contestHander) StartContest(c echo.Context) error {
+	var req startContestRequest
+	if err := c.Bind(&req); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	// データをバリデーションにかける
+	if err := c.Validate(req); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
+	if err := h.serv.StartContest(req.contestID); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
 	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contests_quesions"))
 }

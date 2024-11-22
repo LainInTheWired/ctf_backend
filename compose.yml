@@ -63,6 +63,8 @@ services:
       - ./mysql/logs:/var/log/mysql
       - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql/sample.sql:/docker-entrypoint-initdb.d/sample.sql
+
     environment:
       - MYSQL_DATABASE=ctf
       - MYSQL_USER=user
@@ -81,11 +83,21 @@ services:
   nfs:
     build: 
       context: nfs
+    privileged: true
     ports:
-      - "8888:80"
+      - "2049:2049"    # NFS データポート
+      - "20048:20048"  # NFS マウントポート    
     volumes:
-      - "./nfs/share:/share"
+      - nfs-data:/share
       - "./nfs/exports:/etc/exports"
     tty: true
-  
-  
+  # traefik:
+  #   image: "traefik:v3.1"
+  #   ports:
+  #     - "8080:80"
+  #   volumes:
+  #     - ./traefik
+
+volumes:
+  nfs-data:
+    name: "nfs-data"

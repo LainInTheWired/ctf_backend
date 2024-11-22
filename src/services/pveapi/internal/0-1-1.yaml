@@ -1,0 +1,13 @@
+#cloud-config
+hostname: 0-1-1
+fqdn: 0-1-1
+ssh_pwauth: 1
+users:
+    - name: user
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      shell: /bin/bash
+      lock_passwd: false
+      ssh_pwauth: "1"
+packages:
+    - git
+    - curl

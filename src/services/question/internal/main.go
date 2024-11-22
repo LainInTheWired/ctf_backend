@@ -16,6 +16,7 @@ import (
 	"github.com/LainInTheWired/ctf_backend/question/repository"
 	"github.com/LainInTheWired/ctf_backend/question/service"
 	myvalidator "github.com/LainInTheWired/ctf_backend/shared/pkg/validator"
+	"github.com/joho/godotenv"
 	"golang.org/x/xerrors"
 
 	_ "github.com/go-sql-driver/mysql" // 空のインポートを追加
@@ -91,8 +92,17 @@ func (a *MiddlewareTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	return res, err
 }
 
+// logBody はリクエストボディをログに出力するミドルウェアです
+func logBody(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		buf, _ := io.ReadAll(c.Request().Body)
+		c.Logger().Info(string(buf))
+		c.Request().Body = io.NopCloser(bytes.NewBuffer(buf))
+		return next(c)
+	}
+}
 func NewDBClient() (*sql.DB, error) {
-	db, err := sql.Open("mysql", "user:user@tcp(db:3306)/ctf")
+	db, err := sql.Open("mysql", fmt.Sprintf("user:user@tcp(%s:3306)/ctf", os.Getenv("MYSQL_URL")))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -119,6 +129,11 @@ func NewRedisClient() (*redis.Client, error) {
 }
 
 func main() {
+	// .envファイルを読み込む
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 	// mysql初期化処理
 	db, err := NewDBClient()
 	if err != nil {
@@ -155,6 +170,8 @@ func main() {
 	// アクセスログを出力
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(logBody)
+
 	e.Validator = myvalidator.NewValidator()
 
 	tr := &http.Transport{
@@ -171,9 +188,10 @@ func main() {
 	}
 
 	mr := repository.NewMysqlRepository(db)
-	// pr := repository.NewPVEAPIRepository(client)
+	pr := repository.NewPVEAPIRepository(client, os.Getenv("PVEAPI_URL"))
+	ter := repository.NewTeamRepository(client, os.Getenv("TEAM_URL"))
 
-	s := service.NewQuestionService(mr)
+	s := service.NewQuestionService(mr, pr, ter)
 	h := handler.NewQuestionHander(s)
 
 	fmt.Println(client)
@@ -181,6 +199,11 @@ func main() {
 
 	e.POST("/question", h.CreateQuestion)
 	e.DELETE("/question", h.DeleteQuestion)
+
+	e.GET("/question/:id", h.GetQuestionsInContest)
+	e.GET("/question", h.GetQuestions)
+
+	e.POST("/question/clone", h.CloneQuestion)
 
 	// e.POST("/contest", h.CreateContest)
 	// e.DELETE("/contest", h.DeleteContest)

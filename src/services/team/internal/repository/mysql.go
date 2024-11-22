@@ -13,8 +13,9 @@ type mysqlRepository struct {
 type MysqlRepository interface {
 	InsertTeam(team model.Team) error
 	DeleteTeam(team model.Team) error
-	SelectContestByTeam(cid int) ([]model.Team, error)
+	SelectTeamInContest(cid int) ([]model.Team, error)
 	InsertContestTeams(ct model.ContestTeams) error
+	SelectTeamUsersInContest(cid int) ([]model.Team, error)
 }
 
 func NewMysqlRepository(db *sql.DB) MysqlRepository {
@@ -56,7 +57,7 @@ func (m *mysqlRepository) DeleteTeam(team model.Team) error {
 	return nil
 }
 
-func (m *mysqlRepository) SelectContestByTeam(cid int) ([]model.Team, error) {
+func (m *mysqlRepository) SelectTeamInContest(cid int) ([]model.Team, error) {
 	var teams []model.Team
 	//  emailよりユーザ情報を取得
 	rows, err := m.DB.Query("SELECT t.id,t.name FROM contest_teams AS ct JOIN teams AS t ON t.id = ct.team_id WHERE ct.contest_id = ?", cid)
@@ -83,6 +84,66 @@ func (m *mysqlRepository) SelectContestByTeam(cid int) ([]model.Team, error) {
 
 	// }
 	return teams, nil
+}
+
+func (m *mysqlRepository) SelectTeamUsersInContest(cid int) ([]model.Team, error) {
+	var teams []model.Team
+	//  emailよりユーザ情報を取得
+	rows, err := m.DB.Query("SELECT t.id, t.name,tu.user_id,u.name,u.email  FROM contest_teams AS ct JOIN teams AS t ON t.id = ct.team_id JOIN team_users AS tu ON t.id = tu.team_id  JOIN users AS u ON u.id = tu.user_id   WHERE ct.contest_id = ?", cid)
+	if err != nil {
+		return nil, errors.Wrap(err, "error select contest_teams")
+	}
+	defer rows.Close()
+
+	// チームIDをキーとするマップを作成
+	teamMap := make(map[int]*model.Team)
+
+	for rows.Next() {
+		var (
+			teamID    int
+			teamName  string
+			userID    int
+			userName  string
+			userEmail string
+		)
+
+		// すべてのカラムをスキャン
+		if err := rows.Scan(&teamID, &teamName, &userID, &userName, &userEmail); err != nil {
+			return nil, errors.Wrap(err, "SelectTeamUsersInContest: failed to scan row")
+		}
+
+		// チームがマップに存在しない場合、追加
+		team, exists := teamMap[teamID]
+		if !exists {
+			team = &model.Team{
+				ID:    teamID,
+				Name:  teamName,
+				Users: []model.User{},
+			}
+			teamMap[teamID] = team
+		}
+
+		// ユーザーをチームに追加
+		user := model.User{
+			ID:    userID,
+			Name:  userName,
+			Email: userEmail,
+			// 必要に応じてPasswordフィールドも追加
+		}
+		team.Users = append(team.Users, user)
+	}
+
+	// エラーチェック
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "SelectTeamUsersInContest: rows error")
+	}
+
+	// マップからスライスへチームを追加
+	for _, team := range teamMap {
+		teams = append(teams, *team)
+	}
+	return teams, nil
+
 }
 
 func (m *mysqlRepository) InsertContestTeams(ct model.ContestTeams) error {

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/LainInTheWired/ctf_backend/contest/model"
 	"github.com/LainInTheWired/ctf_backend/contest/repository"
 	"github.com/cockroachdb/errors"
@@ -14,17 +16,22 @@ type ContestService interface {
 	ListContest() ([]model.Contest, error)
 	ListContestByTeams(tid int) ([]model.Contest, error)
 	JoinContestQuesionts(ids []map[string]int) error
+	StartContest(cid int) error
 }
 
 type contestService struct {
 	pveRepo   repository.PVEAPIRepository
 	mysqlRepo repository.MysqlRepository
+	teamRepo  repository.TeamRepository
+	quesRepo  repository.QuestionRepository
 }
 
-func NewContestService(pveRepo repository.PVEAPIRepository, mysqlRepo repository.MysqlRepository) ContestService {
+func NewContestService(pveRepo repository.PVEAPIRepository, mysqlRepo repository.MysqlRepository, teamRepo repository.TeamRepository, quesRepo repository.QuestionRepository) ContestService {
 	return &contestService{
 		pveRepo:   pveRepo,
 		mysqlRepo: mysqlRepo,
+		teamRepo:  teamRepo,
+		quesRepo:  quesRepo,
 	}
 }
 
@@ -75,6 +82,36 @@ func (r *contestService) JoinContestQuesionts(ids []map[string]int) error {
 		err := r.mysqlRepo.InsertContestsQuestions(id["qid"], id["cid"])
 		if err != nil {
 			return errors.Wrap(err, "can't delete team_contests")
+		}
+	}
+	return nil
+}
+
+func (r *contestService) StartContest(cid int) error {
+	teams, err := r.teamRepo.ListTeamUsersByContest(1)
+	if err != nil {
+		return errors.Wrap(err, "can't get ListTeamUsers")
+	}
+	fmt.Printf("%+v", teams)
+	questions, err := r.quesRepo.GetListQuestionsByContest(1)
+	if err != nil {
+		return errors.Wrap(err, "can't get ListQuestions")
+	}
+
+	for _, team := range teams {
+		for _, ques := range questions {
+			name := fmt.Sprintf("%d-%d-%d", cid, team.ID, ques.ID)
+			m := model.QuesionRequest{
+				ID:   ques.VMID,
+				Name: name,
+			}
+			if err := r.quesRepo.CloneQuestion(m); err != nil {
+				return errors.Wrap(err, "can't get ListQuestions")
+			}
+			// cloudinit := model.Cloudinit{
+			// 	ContestQuestionsID: ,
+			// }
+			// r.mysqlRepo.InsertCloudinit()
 		}
 	}
 	return nil

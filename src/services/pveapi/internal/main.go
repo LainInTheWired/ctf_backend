@@ -198,7 +198,12 @@ func main() {
 	h := handler.NewPVEAPI(s)
 
 	e.GET("/", hello)
-	e.POST("/createcloudinitvm", h.CreateCloudinitVM)
+	e.POST("/vm", h.CreateCloudinitVM)
+	e.DELETE("/vm", h.DeleteVM)
+	e.POST("/cloudinit", h.Cloudinit)
+	e.DELETE("/cloudinit", h.DeleteCloudinit)
+	e.POST("/template", h.ToTemplate)
+
 	// e.GET("/vm", h.GetVM)
 	// e.PUT("/vm", h.GETTestHander)
 	// e.POST("/getnode", h.GetNodeTestHander)

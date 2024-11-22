@@ -15,6 +15,7 @@ type MysqlRepository interface {
 	SelectContest() ([]model.Contest, error)
 	SelectTeamsByContest(tid int) ([]model.Contest, error)
 	InsertContestsQuestions(qid, cid int) error
+	InsertCloudinit(contest model.Cloudinit) error
 }
 
 type mysqlRepository struct {
@@ -42,8 +43,22 @@ func (r *mysqlRepository) InsertContest(contest model.Contest) error {
 	return nil
 }
 
-func (r *mysqlRepository) DeleteContest(contest model.Contest) error {
+func (r *mysqlRepository) InsertCloudinit(contest model.Cloudinit) error {
+	// emailが登録されているかチェック
+	ins, err := r.db.Prepare("INSERT INTO cloudinit (contest_questions_id,team_id,filename) VALUES(? ,?, ?)")
+	if err != nil {
+		return errors.Wrap(err, "contest insert error")
+	}
+	defer ins.Close()
 
+	_, err = ins.Exec(contest.ContestQuestionsID, contest.TeamID, contest.Filename)
+	if err != nil {
+		return errors.Wrap(err, "can't insert cloudinit")
+	}
+	return nil
+}
+
+func (r *mysqlRepository) DeleteContest(contest model.Contest) error {
 	// DELETE文を直接実行（Prepareは必要に応じて使用）
 	result, err := r.db.Exec("DELETE FROM contests WHERE id = ?", contest.ID)
 	if err != nil {
@@ -60,7 +75,6 @@ func (r *mysqlRepository) DeleteContest(contest model.Contest) error {
 	if rowsAffected == 0 {
 		return errors.New("no contest found with the given ID")
 	}
-
 	return nil
 }
 

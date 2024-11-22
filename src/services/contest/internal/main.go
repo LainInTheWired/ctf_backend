@@ -16,6 +16,7 @@ import (
 	"github.com/LainInTheWired/ctf_backend/contest/repository"
 	"github.com/LainInTheWired/ctf_backend/contest/service"
 	myvalidator "github.com/LainInTheWired/ctf_backend/shared/pkg/validator"
+	"github.com/joho/godotenv"
 	"golang.org/x/xerrors"
 
 	_ "github.com/go-sql-driver/mysql" // 空のインポートを追加
@@ -117,6 +118,11 @@ func NewRedisClient() (*redis.Client, error) {
 }
 
 func main() {
+	// .envファイルを読み込む
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 	// mysql初期化処理
 	db, err := NewDBClient()
 	if err != nil {
@@ -133,6 +139,14 @@ func main() {
 	e := echo.New()
 	// セッション
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte("secret"))))
+	// CORSミドルウェアの設定
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{"http://localhost:3000"}, // フロントエンドのURL
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+		ExposeHeaders:    []string{echo.HeaderContentLength},
+		AllowCredentials: true, // クッキーや認証情報を許可する場合
+	}))
 
 	// ログの表示方式の切り替え
 	env := os.Getenv("ENV")
@@ -169,9 +183,11 @@ func main() {
 	}
 
 	mr := repository.NewMysqlRepository(db)
-	pr := repository.NewPVEAPIRepository(client)
+	pr := repository.NewPVEAPIRepository(client, os.Getenv("PVEAPI_URL"))
+	ter := repository.NewTeamRepository(client, os.Getenv("TEAM_URL"))
+	qr := repository.NewQuestionRepository(client, os.Getenv("QUESTION_URL"))
 
-	s := service.NewContestService(pr, mr)
+	s := service.NewContestService(pr, mr, ter, qr)
 	h := hander.NewContestHander(s)
 
 	fmt.Println(h)
@@ -181,6 +197,7 @@ func main() {
 	e.DELETE("/team_contests", h.DeleteTeamContest)
 	e.GET("/contest", h.ListContest)
 	e.GET("/contestbyteam", h.ListContestByTeams)
+	e.POST("/start", h.StartContest)
 
 	e.Start(":8000")
 }

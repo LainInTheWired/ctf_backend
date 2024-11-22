@@ -8,14 +8,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/LainInTheWired/ctf-backend/pveapi/model"
+	"github.com/cockroachdb/errors"
 	"golang.org/x/xerrors"
-	"gopkg.in/yaml.v3"
 )
 
 type pveRepository struct {
@@ -30,16 +28,21 @@ type PVEConfig struct {
 }
 
 type PVERepository interface {
-	CloneVM(name string, id int, node string, cloneid int) error
+	CloneVM(name string, id int, cnode string, cloneid int, tnode string) error
 	GetVM(string) (*model.VMConfig, error)
 	EditVM(model.VMEdit) error
 	GetNodeList() ([]model.NodeList, error)
 	GetVMList(nodes *model.NodeList) ([]model.VMList, error)
 	DeleteVM(vmdelete *model.VMDelete) error
-	CloudinitGenerator(fname string, host string, users []model.User) error
+	CloudinitGenerator(fname string, host string, fqdn string, sshPwauth int, users []model.User) error
 	TransferFileViaSCP(fname string) error
 	NextVMID() (string, error)
 	GetClusterResourcesList() ([]model.ClusterResources, error)
+	ResizeDisk(node string, disk string, size int, vmid int) error
+	Boot(node string, vmid int) error
+	Shutdown(node string, vmid int) error
+	Template(node string, vmid int) error
+	DeleteFile(fname string) error
 }
 
 func NewPVERepository(conf *model.PVEConfig, client *http.Client) PVERepository {
@@ -121,15 +124,24 @@ func (r *pveRepository) EditVM(vmedit model.VMEdit) error {
 	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/config", r.pveConf.APIURL, vmedit.Node, vmedit.Vmid)
 	// フォームデータの作成
 	formData := url.Values{}
-	formData.Set("cores", "2")
+	if vmedit.Memory != 0 {
+		formData.Set("memory", strconv.Itoa(vmedit.Memory))
+	}
+	if vmedit.Cores != 0 {
+		formData.Set("cores", strconv.Itoa(vmedit.Cores))
+
+	}
+
 	for i, v := range vmedit.Ipconfig {
 		formData.Set(fmt.Sprintf("ipconfig%d", i), v)
 	}
 	for i, v := range vmedit.Scsi {
 		formData.Set(fmt.Sprintf("scsi%d", i), v)
 	}
+
 	if vmedit.Cicustom != "" {
 		formData.Set("cicustom", fmt.Sprintf("user=cephfs:snippets/%s", vmedit.Cicustom))
+		fmt.Printf("user=cephfs:snippets/%s", vmedit.Cicustom)
 	}
 
 	fmt.Println("Request Body:", formData.Encode())
@@ -163,7 +175,7 @@ func (r *pveRepository) EditVM(vmedit model.VMEdit) error {
 
 	// エラーチェック
 	if resp.StatusCode >= 400 {
-		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+		return errors.Newf("API Error: status code %d, response: %s, body: %s", resp.StatusCode, pveresp.Errors["errors"])
 	}
 
 	// クローン作成のUPIDを表示
@@ -211,17 +223,16 @@ func (r *pveRepository) GetVM(id string) (*model.VMConfig, error) {
 	return &getVMconfig.Data, nil
 }
 
-func (r *pveRepository) CloneVM(name string, id int, node string, cloneid int) error {
-
+func (r *pveRepository) CloneVM(name string, id int, cnode string, cloneid int, tnode string) error {
 	// フォームデータの作成
-	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/clone", r.pveConf.APIURL, node, cloneid)
-	fmt.Printf("%s/nodes/%s/qemu/%b/clone\n", r.pveConf.APIURL, node, cloneid)
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/clone", r.pveConf.APIURL, cnode, cloneid)
+	fmt.Printf("%s/nodes/%s/qemu/%b/clone\n", r.pveConf.APIURL, cnode, cloneid)
 	// フォームデータの作成
 	formData := url.Values{}
 	formData.Set("name", name)
 	formData.Set("newid", strconv.Itoa(id))
-	formData.Set("node", node)
-	formData.Set("full", "1")
+	formData.Set("target", tnode)
+	formData.Set("full", "0")
 
 	// 新しいPOSTリクエストの作成
 	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(formData.Encode()))
@@ -297,57 +308,6 @@ func (r *pveRepository) DeleteVM(vmdelete *model.VMDelete) error {
 	return nil
 }
 
-func (r *pveRepository) CloudinitGenerator(fname string, host string, users []model.User) error {
-	config := model.CloudConfig{
-		Hostname: host,
-		Users:    users,
-		Packages: []string{
-			"git",
-			"curl",
-		},
-	}
-	yamlData, err := yaml.Marshal(&config)
-	if err != nil {
-		fmt.Printf("Error marshalling YAML: %v\n", err)
-		return nil
-	}
-	yamlData = append([]byte("#cloud-config\n"), yamlData...)
-
-	// ファイルに書き出し
-	err = os.WriteFile(fname, yamlData, 0644)
-	if err != nil {
-		fmt.Printf("Error writing YAML to file: %v\n", err)
-		return nil
-	}
-	return nil
-}
-
-func (r *pveRepository) TransferFileViaSCP(fname string) error {
-	localPath := fname
-	remoteUser := "root"
-	// remoteHost := "10.0.10.30"
-	remoteHost := os.Getenv("PROXMOX_API_URL")
-	remotePath := "/mnt/pve/cephfs/snippets/"
-	cmd := exec.Command("scp",
-		"-i", "/ssh/id_ed25519",
-		"-o", "StrictHostKeyChecking=no",
-		localPath,
-		fmt.Sprintf("%s@%s:%s", remoteUser, remoteHost, remotePath),
-	)
-
-	// コマンドの標準出力と標準エラーを取得
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	// コマンドの実行
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("scp コマンドの実行に失敗しました: %w", err)
-	}
-
-	return nil
-
-}
-
 func (r *pveRepository) NextVMID() (string, error) {
 	endpoint := fmt.Sprintf("%s/cluster/nextid", r.pveConf.APIURL)
 	req, err := http.NewRequest("GET", endpoint, nil)
@@ -379,10 +339,8 @@ func (r *pveRepository) NextVMID() (string, error) {
 	if resp.StatusCode >= 400 {
 		return "", xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
 	}
-
 	// クローン作成のUPIDを表示
 	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
-
 	return pveresp.Data, nil
 }
 
@@ -422,4 +380,185 @@ func (r *pveRepository) GetClusterResourcesList() ([]model.ClusterResources, err
 	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
 
 	return pveresp.Data, nil
+}
+
+func (r *pveRepository) ResizeDisk(node string, disk string, size int, vmid int) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/resize", r.pveConf.APIURL, node, vmid)
+	fmt.Printf("%s/nodes/%s/qemu/%b/clone\n", r.pveConf.APIURL, node, vmid)
+	// フォームデータの作成
+	formData := url.Values{}
+	formData.Set("disk", disk)
+	formData.Set("size", fmt.Sprintf("%dG", size))
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("PUT", endpoint, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp model.ResponsePVE[string]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("resize  vm disk %s\n", pveresp.Data)
+
+	return nil
+}
+
+func (r *pveRepository) Boot(node string, vmid int) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/status/start", r.pveConf.APIURL, node, vmid)
+	// フォームデータの作成
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("POST", endpoint, nil)
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp model.ResponsePVE[string]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("start vm%s\n", pveresp.Data)
+
+	return nil
+}
+
+func (r *pveRepository) Shutdown(node string, vmid int) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/status/shutdown", r.pveConf.APIURL, node, vmid)
+	// フォームデータの作成
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("POST", endpoint, nil)
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp model.ResponsePVE[string]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("shutdown vm%s\n", pveresp.Data)
+
+	return nil
+
+}
+
+func (r *pveRepository) Template(node string, vmid int) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/template", r.pveConf.APIURL, node, vmid)
+	// フォームデータの作成
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("POST", endpoint, nil)
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp model.ResponsePVE[string]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("template vm%s\n", pveresp.Data)
+
+	return nil
 }

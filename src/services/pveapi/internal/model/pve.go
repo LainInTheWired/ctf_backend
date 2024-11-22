@@ -93,7 +93,7 @@ type VMEdit struct {
 	Boot     string
 	Bootdisk string
 	Ipconfig []string
-	Memory   string
+	Memory   int
 	Scsi     []string
 	Cicustom string
 }
@@ -107,23 +107,66 @@ type ResponsePVE[T any] struct {
 	Data   T                 `json:"data"`
 	Errors map[string]string `json:"errors,omitempty"`
 }
+
 type ClusterResources struct {
-	Uptime    int    `json:"uptime"`
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Maxmem    int64  `json:"maxmem"`
-	Node      string `json:"node"`
-	Status    string `json:"status"`
-	Maxcpu    int    `json:"maxcpu"`
-	Netin     int    `json:"netin"`
-	Mem       int    `json:"mem"`
-	Template  int    `json:"template"`
-	Diskread  int    `json:"diskread"`
-	Type      string `json:"type"`
-	Diskwrite int    `json:"diskwrite"`
-	Maxdisk   int64  `json:"maxdisk"`
-	CPU       int    `json:"cpu"`
-	Disk      int    `json:"disk"`
-	Netout    int    `json:"netout"`
-	Vmid      int    `json:"vmid"`
+	Uptime    int     `json:"uptime"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Maxmem    int64   `json:"maxmem"`
+	Node      string  `json:"node"`
+	Status    string  `json:"status"`
+	Maxcpu    int     `json:"maxcpu"`
+	Netin     int     `json:"netin"`
+	Mem       int     `json:"mem"`
+	Template  int     `json:"template"`
+	Diskread  int     `json:"diskread"`
+	Type      string  `json:"type"`
+	Diskwrite int     `json:"diskwrite"`
+	Maxdisk   int64   `json:"maxdisk"`
+	CPU       float64 `json:"cpu"`
+	Disk      int     `json:"disk"`
+	Netout    int     `json:"netout"`
+	Vmid      int     `json:"vmid"`
 }
+
+// // type ClusterResources struct {
+// // 	Maxcpu    int     `json:"maxcpu"`
+// // 	Vmid      int     `json:"vmid"`
+// // 	Name      string  `json:"name"`
+// // 	Maxmem    int64   `json:"maxmem"`
+// // 	Disk      int     `json:"disk"`
+// // 	Diskwrite int64   `json:"diskwrite"`
+// // 	Maxdisk   int64   `json:"maxdisk"`
+// // 	Type      string  `json:"type"`
+// // 	ID        string  `json:"id"`
+// // 	Node      string  `json:"node"`
+// // 	Uptime    int     `json:"uptime"`
+// // 	Diskread  int     `json:"diskread"`
+// // 	Netin     int64   `json:"netin"`
+// // 	Status    string  `json:"status"`
+// // 	CPU       float64 `json:"cpu"`
+// // 	Netout    int64   `json:"netout"`
+// // 	Mem       int64   `json:"mem"`
+// // 	Template  int     `json:"template"`
+// // }
+
+// type ClusterResources struct {
+// 	Uptime int64 `json:"uptime"`
+// 	// ID        string  `json:"id"`
+// 	Name      string  `json:"name"`
+// 	Maxmem    int64   `json:"maxmem"`
+// 	Node      string  `json:"node"`
+// 	Status    string  `json:"status"`
+// 	Maxcpu    int     `json:"maxcpu"`
+// 	Netin     int64   `json:"netin"`
+// 	Mem       int64   `json:"mem"`
+// 	Template  int     `json:"template"`
+// 	Diskread  int64   `json:"diskread"`
+// 	Type      string  `json:"type"`
+// 	Diskwrite int64   `json:"diskwrite"`
+// 	Maxdisk   int64   `json:"maxdisk"`
+// 	CPU       float64 `json:"cpu"`
+// 	Disk      int     `json:"disk"`
+// 	Netout    int64   `json:"netout"`
+// 	Vmid      int     `json:"vmid"`
+// }

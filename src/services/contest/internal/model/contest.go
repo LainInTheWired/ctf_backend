@@ -3,15 +3,10 @@ package model
 import "time"
 
 type Contest struct {
-	ID        int
-	Name      string
-	StartDate time.Time
-	EndDate   time.Time
-}
-
-type Team struct {
-	ID   int
-	Name string
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	StartDate time.Time `json:"start_date"`
+	EndDate   time.Time `json:"end_date"`
 }
 
 type ContestsTeam struct {

@@ -24,10 +24,10 @@ type PVEHandler struct {
 
 type createVMRequest struct {
 	Name        string `json"name" validate:"required"`
-	Memory      string `json"memory" validate:"required" `
-	CPUs        string `json"cpu" validate:"required"`
-	OS          string `json"os" validate:"required"`
-	Description string `json"description" validate:"required"`
+	Memory      string `json"memory,omitempty" validate:"required"`
+	CPUs        string `json"cpu,omitempty" validate:"required"`
+	OS          string `json"os,omitempty" validate:"required"`
+	Description string `json"description,omitempty" validate:"required"`
 }
 type CloneQuestionsRequest struct {
 	QID   int    `json"qid" validate:"required"`

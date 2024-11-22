@@ -62,7 +62,6 @@ func (u *userRepository) GetUserByEmail(email string) (model.User, error) {
 			return model.User{}, errors.Wrap(err, "not exist this email")
 		}
 		return model.User{}, errors.Wrap(err, "can't select user by email")
-
 	}
 	return user, nil
 }
