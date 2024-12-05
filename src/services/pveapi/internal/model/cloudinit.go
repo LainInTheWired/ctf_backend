@@ -22,18 +22,3 @@ type User struct {
 	SshAuthorizedKeys []string `yaml:"ssh-authorized-keys,omitempty"`
 	SshPwauth         string   `yaml:"ssh_pwauth,omitempty"`
 }
-
-type QuesionRequest struct {
-	ID          int      `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	CategoryID  int      `json:"category_id"`
-	Env         string   `json:"env"`
-	Sshkeys     []string `json:"sshkeys"`
-	Memory      int      `json"memory"`
-	CPUs        int      `json"cpu"`
-	Disk        int      `json"disk"`
-	IP          string   `json:"ip" validate:"cidr"`
-	Gateway     string   `json:"gateway" validate:"ip"`
-	Filename    string   `json:"filename"`
-}

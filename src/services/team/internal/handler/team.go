@@ -106,7 +106,7 @@ func (t *teamHander) DeleteTeam(c echo.Context) error {
 }
 
 func (t *teamHander) ListTeamByContest(c echo.Context) error {
-	sid := c.QueryParam("id")
+	sid := c.Param("contestID")
 	id, err := strconv.Atoi(sid)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
@@ -149,19 +149,30 @@ func (t *teamHander) JoinContest(c echo.Context) error {
 }
 
 func (t *teamHander) ListTeamUserByContest(c echo.Context) error {
-	sid := c.QueryParam("id")
-	id, err := strconv.Atoi(sid)
+	var teams []model.Team
+	scid := c.Param("contestID")
+	cid, err := strconv.Atoi(scid)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
 	}
-
-	teams, err := t.serv.ListTeamUsersByContest(id)
-
+	suid := c.QueryParam("userid")
+	uid, err := strconv.Atoi(suid)
 	if err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		teams, err = t.serv.ListTeamUsersByContest(cid)
+		if err != nil {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		}
+	} else {
+		teams, err = t.serv.ListTeamInContestByUserID(cid, uid)
+		if err != nil {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		}
 	}
+
 	fmt.Printf("%+v", teams[0])
 	return c.JSON(http.StatusOK, teams)
 }

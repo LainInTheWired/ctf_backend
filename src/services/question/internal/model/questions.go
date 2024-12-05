@@ -12,7 +12,9 @@ type Question struct {
 	Description  string `json:"description"`
 	VMID         int    `json:"vmid"`
 	Env          string `json:"env"`
+	Answer       string `json:"answer"`
 	CategoryName string `json:"category_name"`
+	Point        int    `json:"point"`
 }
 type Category struct {
 	ID   int
@@ -53,4 +55,12 @@ type CloudinitResponse struct {
 	Sshkeys   []string `json:"sshkeys"`
 	Password  string   `json:"passwd"`
 	SshPwauth string   `json:"ssh_pwauth"`
+}
+
+type Point struct {
+	ID        int `json:"id"`
+	TeamID    int `json:"team_id"`
+	QuesionID int `json:"question_id"`
+	ContestID int `json:"contest_id"`
+	Point     int `json:"point"`
 }

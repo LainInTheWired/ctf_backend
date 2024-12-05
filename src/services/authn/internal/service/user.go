@@ -1,6 +1,8 @@
 package service
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -19,6 +21,7 @@ type UserService interface {
 	AddPermission(*model.Permission) error
 	BindRolePermissions(int, int) error
 	BindUserRoles(uid int, rid int) error
+	SetInitRolePermissionsToRedis() error
 }
 type userService struct {
 	usrepo repository.UserRepository
@@ -53,11 +56,14 @@ func (s *userService) Login(u model.User) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "authentication failed")
 	}
+	if err := s.SetRolePermissionsToRedis(getUser.ID); err != nil {
+		return "", errors.Wrap(err, "can't set role permission to redis")
+	}
 	return sessionID, nil
 }
 
 func (s *userService) CheckSession(sessionID string) (string, error) {
-	sessionData, err := s.rerepo.Get(sessionID)
+	sessionData, err := s.rerepo.Get(fmt.Sprintf("session:%s", sessionID))
 	if err != nil {
 		return "", errors.Wrap(err, "can't get sessionID")
 	}
@@ -75,21 +81,13 @@ func NewSession(userID int, s *userService) (string, error) {
 	// 	"CreatedAt": time.Now().Format(time.RFC3339),
 	// }
 
-	err := s.rerepo.Set(sessionID, uid, time.Hour)
+	err := s.rerepo.Set(fmt.Sprintf("session:%s", sessionID), uid, time.Hour)
 	if err != nil {
 		return "", errors.Wrap(err, "redis can't set sesstionID")
 	}
 	return sessionID, nil
 }
 
-func (s *userService) GetSession(sessionID string) (string, error) {
-	r, err := s.rerepo.Get(sessionID)
-	if err != nil {
-		return "", errors.Wrap(err, "redis can't get")
-
-	}
-	return r, nil
-}
 func (s *userService) AddRole(role *model.Role) (int, error) {
 	rid, err := s.usrepo.CreateRole(role)
 	if err != nil {
@@ -97,6 +95,7 @@ func (s *userService) AddRole(role *model.Role) (int, error) {
 	}
 	return rid, nil
 }
+
 func (s *userService) BindRolePermissions(rid int, pid int) error {
 	err := s.usrepo.BindRolePermissions(rid, pid)
 	if err != nil {
@@ -123,6 +122,38 @@ func (s *userService) Logout(sessionID string) error {
 	err := s.rerepo.Delete(sessionID)
 	if err != nil {
 		return errors.Wrap(err, "redis can't delete key")
+	}
+	return nil
+}
+
+func (s *userService) SetRolePermissionsToRedis(userid int) error {
+	ur, err := s.usrepo.GetUserWithRoles(userid)
+	if err != nil {
+		return errors.Wrap(err, "can't get user role")
+	}
+	jur, err := json.Marshal(ur.Role)
+	if err != nil {
+		return errors.Wrap(err, "can't json marshal")
+	}
+	if err := s.rerepo.Set(fmt.Sprintf("user:%d", ur.ID), jur, time.Hour); err != nil {
+		return errors.Wrap(err, "can't set redis")
+	}
+	return nil
+}
+
+func (s *userService) SetInitRolePermissionsToRedis() error {
+	rps, err := s.usrepo.GetRolePermissions()
+	if err != nil {
+		return errors.Wrap(err, "can't get role permission")
+	}
+
+	for _, rp := range rps {
+		jrp, err := json.Marshal(rp)
+		if err != nil {
+			return errors.Wrap(err, "can't marshal json")
+		}
+
+		s.rerepo.Set(fmt.Sprintf("role:%d", rp.ID), jrp, 0)
 	}
 	return nil
 }

@@ -30,10 +30,10 @@ type quesionRequest struct {
 	CategoryID  int      `json:"category_id"`
 	Env         string   `json:"env"`
 	Sshkeys     []string `json:"sshkeys"`
-	Memory      int      `json"memory"`
+	Memory      int      `json:"memory"`
 	Password    string   `json:"password"`
-	CPUs        int      `json"cpu"`
-	Disk        int      `json"disk"`
+	CPUs        int      `json:"cpu"`
+	Disk        int      `json:"disk"`
 	IP          string   `json:"ip,omitempty" validate:"omitempty,cidr"`
 	Gateway     string   `json:"gateway,omitempty" validate:"omitempty,ip"`
 	Filename    string   `json:"filename"`
@@ -115,13 +115,32 @@ func (h *quesionHander) DeleteQuestion(c echo.Context) error {
 }
 
 func (h *quesionHander) GetQuestions(c echo.Context) error {
-	q, err := h.serv.GetQuestions()
-	if err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	sid := c.QueryParam("id")
+	fmt.Println(sid)
+	if sid == "" {
+		q, err := h.serv.GetQuestions()
+		if err != nil {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		}
+		return c.JSON(http.StatusAccepted, q)
+	} else {
+		id, err := strconv.Atoi(sid)
+		if err != nil {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		}
+		q, err := h.serv.GetQuesionByID(id)
+		if err != nil {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+
+		}
+		return c.JSON(http.StatusAccepted, q)
 	}
-	return c.JSON(http.StatusAccepted, q)
 }
 
 func (h *quesionHander) GetQuestionsInContest(c echo.Context) error {
@@ -168,6 +187,7 @@ func (h *quesionHander) CloneQuestion(c echo.Context) error {
 		ID:          req.ID,
 		Memory:      req.Memory,
 		IP:          req.IP,
+		Password:    req.Password,
 		Gateway:     req.Gateway,
 	}
 
@@ -177,4 +197,23 @@ func (h *quesionHander) CloneQuestion(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "delete contest_teams"))
+}
+
+func (h *quesionHander) GetQuesionByID(c echo.Context) error {
+	sid := c.QueryParam("questionID")
+	id, err := strconv.Atoi(sid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	question, err := h.serv.GetQuesionByID(id)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
+	return c.JSON(http.StatusAccepted, question)
+
 }

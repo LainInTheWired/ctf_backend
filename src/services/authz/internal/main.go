@@ -3,19 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"database/sql"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	myvalidator "github.com/LainInTheWired/ctf_backend/shared/pkg/validator"
-	"github.com/LainInTheWired/ctf_backend/team/handler"
-	"github.com/LainInTheWired/ctf_backend/team/repository"
-	"github.com/LainInTheWired/ctf_backend/team/service"
 	"golang.org/x/xerrors"
 
 	_ "github.com/go-sql-driver/mysql" // 空のインポートを追加
@@ -155,31 +149,28 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Validator = myvalidator.NewValidator()
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番では false にする
-	}
+	// tr := &http.Transport{
+	// 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番では false にする
+	// }
 	// カスタム AuthTransport を作成
-	authTransport := &MiddlewareTransport{
-		Transport: tr,
-	}
+	// authTransport := &MiddlewareTransport{
+	// 	Transport: tr,
+	// }
 	// カスタム HTTP クライアントの作成
-	client := &http.Client{
-		Transport: authTransport,
-		Timeout:   60 * time.Second,
-	}
+	// client := &http.Client{
+	// 	Transport: authTransport,
+	// 	Timeout:   60 * time.Second,
+	// }
 
-	mr := repository.NewMysqlRepository(db)
+	// mr := repository.NewMysqlRepository(db)
 	// pr := repository.NewPVEAPIRepository(client)
 
-	s := service.NewTeamService(mr)
-	h := handler.NewTeamHandler(s)
+	// s := service.NewContestService(pr, mr)
+	// h := hander.NewContestHander(s)
 
-	fmt.Println(h, client)
-	e.GET("/team/:contestID", h.ListTeamByContest)
-	e.POST("/team", h.CreateTeam)
-	e.DELETE("/team/:id", h.DeleteTeam)
-	e.GET("/team/:contestID/user", h.ListTeamUserByContest)
-
+	e.GET("/", hello)
+	// e.POST("/contest", h.CreateContest)
+	// e.DELETE("/contest", h.DeleteContest)
 	// e.POST("/team_contests", h.JoinTeamsinContest)
 	// e.DELETE("/team_contests", h.DeleteTeamContest)
 

@@ -1,0 +1,101 @@
+http:
+  routers:
+    # Define a connection between requests and services
+    # to-whoami:
+    #   rule: "Host(`localhost`)"
+    #    # If the rule matches, applies the middleware
+    #   # If the rule matches, forward to the whoami service (declared below)
+    #   entryPoints:
+    #     - web
+    #   service: test
+    #   middlewares:
+    #     - test-auth
+    authn:
+      rule: "Host(`localhost`) && PathPrefix(`/authn`)"
+      entryPoints:
+        - web
+      service: authn
+      middlewares:
+        - remove-first-path2
+        - cors
+    contest:
+      rule: "Host(`localhost`) && PathPrefix(`/contest`)"
+      entryPoints:
+        - web
+      service: contest
+      middlewares:
+        - cors
+        - gateway
+    question:
+      rule: "Host(`localhost`) && PathPrefix(`/question`)"
+      entryPoints:
+        - web
+      service: question
+      middlewares:
+        - cors
+        - gateway
+
+      
+  services:
+    authn:
+      loadBalancer:
+        passHostHeader: true  # ここに移動します
+        servers:
+          - url: "http://authn:8000"
+
+    authz:
+      loadBalancer:
+        servers:
+          - url: "http://authz:8000"
+    contest:
+      loadBalancer:
+        servers:
+          - url: "http://contest:8000"
+    team:
+     loadBalancer:
+        servers:
+          - url: "http://team:8000"
+    question:
+     loadBalancer:
+        servers:
+          - url: "http://question:8000"
+
+  middlewares:
+    # set-root-path:
+    #   replacePath:
+    #     path: "/"
+    remove-first-path:
+      replacePathRegex:
+        regex: "^/[^/]+(.*)"
+        replacement: "$1"
+    remove-first-path2:
+      stripPrefix:
+        prefixes:
+          - "/authn"
+          - "/authn/"
+
+
+    gateway:
+      forwardAuth:
+        address: "http://gateway:8000/auth"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-User-ID" 
+    cors:
+      headers:
+        accessControlAllowOriginList:
+          - http://localhost:3000
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+        accessControlAllowHeaders:
+          - Origin
+          - Content-Type
+          - Accept
+          - Authorization
+        accessControlAllowCredentials: true
+
+      

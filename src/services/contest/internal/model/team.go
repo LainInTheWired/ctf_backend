@@ -3,7 +3,7 @@ package model
 type Team struct {
 	ID    int    `json:"id"`
 	Name  string `json:"name"`
-	Users []User `json:"users#`
+	Users []User `json:"users"`
 }
 
 type ContestTeams struct {
@@ -24,7 +24,10 @@ type Question struct {
 	Description  string `json:"description"`
 	VMID         int    `json:"vmid"`
 	Env          string `json:"env"`
+	Answer       string `json:"answer"`
+	Point        int    `json:"point"`
 	CategoryName string `json:"category_name"`
+	CurrentPoint int    `json:"current_point,omitempty"`
 }
 
 type QuesionRequest struct {
@@ -34,11 +37,12 @@ type QuesionRequest struct {
 	CategoryID  int      `json:"category_id,omitempty"`
 	Env         string   `json:"env,omitempty"`
 	Sshkeys     []string `json:"sshkeys,omitempty"`
-	Memory      int      `json"memory,omitempty"`
-	CPUs        int      `json"cpu,omitempty"`
-	Disk        int      `json"disk,omitempty"`
+	Memory      int      `json:"memory,omitempty"`
+	CPUs        int      `json:"cpu,omitempty"`
+	Disk        int      `json:"disk,omitempty"`
 	IP          string   `json:"ip,omitempty" validate:"cidr"`
 	Gateway     string   `json:"gateway,omitempty" validate:"ip"`
+	Password    string   `json:"password,omitempty"`
 }
 
 type Cloudinit struct {

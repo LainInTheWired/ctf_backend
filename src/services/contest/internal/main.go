@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -90,18 +89,6 @@ func (a *MiddlewareTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	return res, err
 }
 
-func NewDBClient() (*sql.DB, error) {
-	db, err := sql.Open("mysql", "user:user@tcp(db:3306)/ctf?parseTime=true")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err = db.Ping(); err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
 func NewRedisClient() (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     "redis:6379",
@@ -124,7 +111,7 @@ func main() {
 		log.Fatalf("Error loading .env file")
 	}
 	// mysql初期化処理
-	db, err := NewDBClient()
+	db, err := repository.NewDBClient()
 	if err != nil {
 		xerrors.Errorf("mysql connection error: %w", err.Error())
 	}
@@ -167,6 +154,13 @@ func main() {
 	// アクセスログを出力
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	// CORS middleware
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+		AllowCredentials: true,
+	}))
 	e.Validator = myvalidator.NewValidator()
 
 	tr := &http.Transport{
@@ -193,11 +187,18 @@ func main() {
 	fmt.Println(h)
 	e.POST("/contest", h.CreateContest)
 	e.DELETE("/contest", h.DeleteContest)
-	e.POST("/team_contests", h.JoinTeamsinContest)
-	e.DELETE("/team_contests", h.DeleteTeamContest)
+	// e.POST("/team_contests", h.JoinTeamsinContest)
+	e.POST("/contest/:contestID/team", h.JoinTeamsinContest)
+	// e.DELETE("/team_contests", h.DeleteTeamContest)
+	e.DELETE("/contest/:contestID/team", h.DeleteTeamContest)
+
 	e.GET("/contest", h.ListContest)
-	e.GET("/contestbyteam", h.ListContestByTeams)
-	e.POST("/start", h.StartContest)
+	e.GET("/contest/:contestID/team", h.ListContestByTeams)
+	e.GET("/contest/:contestID/point", h.GetPoints)
+	// e.POST("/start", h.StartContest)
+	e.POST("/contest/:contestID/start", h.StartContest)
+	e.POST("/contest/:contestID/answer", h.CheckAnswer)
+	e.GET("/contest/:contestID", h.ListQuestionsByContestID)
 
 	e.Start(":8000")
 }

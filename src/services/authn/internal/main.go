@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +12,6 @@ import (
 	"github.com/LainInTheWired/ctf_backend/user/service"
 
 	"github.com/gorilla/sessions"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/xerrors"
 
 	// 正しいモジュールパス
@@ -23,42 +21,15 @@ import (
 	echoLog "github.com/labstack/gommon/log" // エイリアスを付ける
 )
 
-func NewDBClient() (*sql.DB, error) {
-	db, err := sql.Open("mysql", "user:user@tcp(db:3306)/ctf")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err = db.Ping(); err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
-func NewRedisClient() (*redis.Client, error) {
-	client := redis.NewClient(&redis.Options{
-		Addr:     "redis:6379",
-		Password: "user",
-		DB:       0,
-	})
-	// 接続確認
-	ctx := context.Background()
-	_, err := client.Ping(ctx).Result()
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
-}
-
 func main() {
 	// mysql初期化処理
-	db, err := NewDBClient()
+	db, err := repository.NewDBClient()
 	if err != nil {
 		xerrors.Errorf("mysql connection error: %w", err.Error())
 	}
 	defer db.Close()
 
-	reddb, err := NewRedisClient()
+	reddb, err := repository.NewRedis()
 	if err != nil {
 		xerrors.Errorf("redis connetciono error: %w", err.Error())
 	}
@@ -87,6 +58,13 @@ func main() {
 	// アクセスログを出力
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	// CORS middleware
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+		AllowCredentials: true,
+	}))
 	e.Validator = myvalidator.NewValidator()
 
 	usrep := repository.NewUserRepository(db)
@@ -95,7 +73,13 @@ func main() {
 	s := service.NewUserService(usrep, rerep)
 	h := handler.NewHanderSignup(s)
 
+	if err := s.SetInitRolePermissionsToRedis(); err != nil {
+		log.Fatalf("can't role init %v", err)
+	}
+
 	e.GET("/", hello)
+	e.POST("/", hello)
+
 	e.POST("/signup", h.Signup)
 	e.POST("/login", h.Login)
 	e.POST("/createrole", h.CreateRole)

@@ -8,6 +8,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+func NewRedis() (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379",
+		Password: "user",
+		DB:       0,
+	})
+	// 接続確認
+	ctx := context.Background()
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
 type RedisRepository interface {
 	Set(key string, value interface{}, expiration time.Duration) error
 	Get(key string) (string, error)

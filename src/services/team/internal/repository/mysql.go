@@ -16,6 +16,7 @@ type MysqlRepository interface {
 	SelectTeamInContest(cid int) ([]model.Team, error)
 	InsertContestTeams(ct model.ContestTeams) error
 	SelectTeamUsersInContest(cid int) ([]model.Team, error)
+	SelectTeamUsersInContestByUserID(cid, uid int) ([]model.Team, error)
 }
 
 func NewMysqlRepository(db *sql.DB) MysqlRepository {
@@ -122,7 +123,6 @@ func (m *mysqlRepository) SelectTeamUsersInContest(cid int) ([]model.Team, error
 			}
 			teamMap[teamID] = team
 		}
-
 		// ユーザーをチームに追加
 		user := model.User{
 			ID:    userID,
@@ -143,7 +143,6 @@ func (m *mysqlRepository) SelectTeamUsersInContest(cid int) ([]model.Team, error
 		teams = append(teams, *team)
 	}
 	return teams, nil
-
 }
 
 func (m *mysqlRepository) InsertContestTeams(ct model.ContestTeams) error {
@@ -158,4 +157,73 @@ func (m *mysqlRepository) InsertContestTeams(ct model.ContestTeams) error {
 		return errors.Wrap(err, "can't insert contest_teams")
 	}
 	return nil
+}
+
+func (m *mysqlRepository) SelectTeamUsersInContestByUserID(cid, uid int) ([]model.Team, error) {
+	// クエリの実行
+	query := `
+        SELECT t.id, t.name, tu.user_id, u.name, u.email 
+        FROM contest_teams AS ct 
+        JOIN teams AS t ON t.id = ct.team_id 
+        JOIN team_users AS tu ON t.id = tu.team_id  
+        JOIN users AS u ON u.id = tu.user_id 
+        WHERE ct.contest_id = ? AND u.id = ?
+    `
+	rows, err := m.DB.Query(query, cid, uid)
+	if err != nil {
+		return nil, errors.Wrap(err, "error selecting contest_teams")
+	}
+	defer rows.Close()
+
+	// チームをマッピングするためのマップ
+	teamMap := make(map[int]*model.Team)
+
+	for rows.Next() {
+		var (
+			teamID    int
+			teamName  string
+			userID    int
+			userName  string
+			userEmail string
+		)
+
+		// クエリ結果をスキャン
+		err := rows.Scan(&teamID, &teamName, &userID, &userName, &userEmail)
+		if err != nil {
+			return nil, errors.Wrap(err, "error scanning contest_teams rows")
+		}
+
+		// チームが既にマップに存在するか確認
+		team, exists := teamMap[teamID]
+		if !exists {
+			// チームが存在しない場合、新規作成
+			team = &model.Team{
+				ID:    teamID,
+				Name:  teamName,
+				Users: []model.User{},
+			}
+			teamMap[teamID] = team
+		}
+
+		// ユーザー情報をチームに追加
+		user := model.User{
+			ID:    userID,
+			Name:  userName,
+			Email: userEmail,
+		}
+		team.Users = append(team.Users, user)
+	}
+
+	// ループ終了後のエラーチェック
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating contest_teams rows")
+	}
+
+	// マップからスライスに変換
+	teams := make([]model.Team, 0, len(teamMap))
+	for _, team := range teamMap {
+		teams = append(teams, *team)
+	}
+
+	return teams, nil
 }

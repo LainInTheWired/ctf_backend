@@ -1,24 +1,5 @@
 package repository
 
-import (
-	"database/sql"
-
-	"github.com/LainInTheWired/ctf_backend/user/model"
-	"github.com/cockroachdb/errors"
-	_ "github.com/go-sql-driver/mysql" // 空のインポートを追加
-	"golang.org/x/crypto/bcrypt"
-)
-
-type UserRepository interface {
-	CreateUser(user model.User) error
-	GetUserByEmail(email string) (model.User, error)
-	GetUserByID(id int) (model.User, error)
-	CreatePermission(permission *model.Permission) error
-	BindRolePermissions(rid int, pid int) error
-	BindUserRoles(uid int, rid int) error
-	CreateRole(role *model.Role) (int, error)
-}
-
 type userRepository struct {
 	DB *sql.DB
 }
@@ -27,55 +8,6 @@ func NewUserRepository(db *sql.DB) UserRepository {
 	return &userRepository{
 		DB: db,
 	}
-}
-
-func (u *userRepository) CreateUser(user model.User) error {
-	// emailが登録されているかチェック
-	if _, err := u.GetUserByEmail(user.Email); err == nil {
-		return errors.Wrap(err, "already regist email")
-	}
-	// usersテーブルにinsertさせる
-	hashPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return errors.Wrap(err, "can't generate password hash")
-		// return xerrors.Errorf(": %w", err)
-	}
-	ins, err := u.DB.Prepare("INSERT INTO users (name,email,password) VALUES(? ,?, ?)")
-	if err != nil {
-		return errors.Wrap(err, "user insert error")
-	}
-	defer ins.Close()
-
-	_, err = ins.Exec(user.Name, user.Email, hashPassword)
-	if err != nil {
-		return errors.Wrap(err, "can't insert user")
-	}
-
-	return nil
-}
-
-func (u *userRepository) GetUserByEmail(email string) (model.User, error) {
-	var user model.User
-	//  emailよりユーザ情報を取得
-	if err := u.DB.QueryRow("SELECT id,name,email,password FROM users WHERE email = ?", email).Scan(&user.ID, &user.Name, &user.Email, &user.Password); err != nil {
-		if err == sql.ErrNoRows {
-			return model.User{}, errors.Wrap(err, "not exist this email")
-		}
-		return model.User{}, errors.Wrap(err, "can't select user by email")
-	}
-	return user, nil
-}
-func (u *userRepository) GetUserByID(id int) (model.User, error) {
-	var user model.User
-	//  emailよりユーザ情報を取得
-	if err := u.DB.QueryRow("SELECT id,name,email,password FROM users WHERE ID = ?", id).Scan(&user.ID, &user.Name, &user.Email, &user.Password); err != nil {
-		if err == sql.ErrNoRows {
-			return model.User{}, errors.Wrap(err, "not exist this id")
-		}
-		return model.User{}, errors.Wrap(err, "can't select user by id")
-
-	}
-	return user, nil
 }
 
 func (u *userRepository) CreatePermission(permission *model.Permission) error {

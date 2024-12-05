@@ -16,6 +16,7 @@ type TeamService interface {
 	ListTeamByContest(cid int) ([]model.Team, error)
 	JoinContest(ct model.ContestTeams) error
 	ListTeamUsersByContest(cid int) ([]model.Team, error)
+	ListTeamInContestByUserID(cid, uid int) ([]model.Team, error)
 }
 
 func NewTeamService(r repository.MysqlRepository) TeamService {
@@ -55,6 +56,14 @@ func (s *teamService) JoinContest(ct model.ContestTeams) error {
 
 func (s *teamService) ListTeamUsersByContest(cid int) ([]model.Team, error) {
 	teams, err := s.repo.SelectTeamUsersInContest(cid)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't delete team")
+	}
+	return teams, nil
+}
+
+func (s *teamService) ListTeamInContestByUserID(cid, uid int) ([]model.Team, error) {
+	teams, err := s.repo.SelectTeamUsersInContestByUserID(cid, uid)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't delete team")
 	}

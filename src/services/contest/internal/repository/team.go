@@ -12,7 +12,7 @@ import (
 )
 
 type TeamRepository interface {
-	ListTeamUsersByContest(cid int) ([]model.Team, error)
+	ListTeamUsersByContest(cid int, uid *int) ([]model.Team, error)
 }
 
 type teamRepository struct {
@@ -27,8 +27,14 @@ func NewTeamRepository(h *http.Client, url string) TeamRepository {
 	}
 }
 
-func (r *teamRepository) ListTeamUsersByContest(cid int) ([]model.Team, error) {
-	endpoint := fmt.Sprintf("%s/teamusers?id=%d", r.URL, cid)
+func (r *teamRepository) ListTeamUsersByContest(cid int, uid *int) ([]model.Team, error) {
+	var endpoint string
+	if uid == nil {
+		endpoint = fmt.Sprintf("%s/team/%d/user", r.URL, cid)
+	} else {
+		endpoint = fmt.Sprintf("%s/team/%d/user?userid=%d", r.URL, cid, *uid)
+		fmt.Println(endpoint)
+	}
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, xerrors.Errorf("can't create http request: %w", err)
@@ -60,7 +66,7 @@ func (r *teamRepository) ListTeamUsersByContest(cid int) ([]model.Team, error) {
 	}
 
 	// クローン作成のUPIDを表示
-	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", teams)
+	log.Printf("VM クローンの作成が開始されました。UPID: %v\n", teams)
 
 	return teams, nil
 }

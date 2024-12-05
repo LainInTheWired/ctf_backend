@@ -5,6 +5,12 @@ entryPoints:
 providers:
   file:
     filename: /etc/traefik/dynamic.yml
-
+    watch: true  # ファイルの変更を監視
 api:
   dashboard: true
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+
+log:
+  level: DEBUG
+  filePath: "/var/log/traefik/traefik.log"

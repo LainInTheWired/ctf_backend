@@ -20,6 +20,7 @@ type QuesionService interface {
 	CloneQuestion(q model.CreateQuestion) error
 	GetQuestionsInContest(contestID int) ([]model.Question, error)
 	GetQuestions() ([]model.Question, error)
+	GetQuesionByID(qid int) (model.Question, error)
 }
 
 func NewQuestionService(r repository.MysqlRepository, p repository.PVEAPIRepository, t repository.TeamRepository) QuesionService {
@@ -158,4 +159,12 @@ func (s *quesionService) CloneQuestion(q model.CreateQuestion) error {
 	// }
 
 	return nil
+}
+
+func (s *quesionService) GetQuesionByID(qid int) (model.Question, error) {
+	question, err := s.myrepo.SelectQuesionByQuestionID(qid)
+	if err != nil {
+		return model.Question{}, errors.Wrap(err, "can't get question by id")
+	}
+	return question, nil
 }

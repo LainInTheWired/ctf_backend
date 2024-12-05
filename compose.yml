@@ -1,14 +1,23 @@
 version: "3"
 services:
-  auth:
+  authn:
     build: 
-      context: src/services/auth
+      context: src/services/authn
     tty: true
     volumes:
-      - ./src/services/auth:/go/src/auth
-      - ./src/shared:/go/src/auth/shared
+      - ./src/services/authn:/go/src/authn
+      - ./src/shared:/go/src/authn/shared
     ports:
       - 8000:8000
+  authz:
+    build: 
+      context: src/services/authz
+    tty: true
+    volumes:
+      - ./src/services/authz:/go/src/authz
+      - ./src/shared:/go/src/authz/shared
+    ports:
+      - 8006:8000
   gateway:
     build: 
       context: src/services/gateway
@@ -91,12 +100,23 @@ services:
       - nfs-data:/share
       - "./nfs/exports:/etc/exports"
     tty: true
-  # traefik:
-  #   image: "traefik:v3.1"
-  #   ports:
-  #     - "8080:80"
-  #   volumes:
-  #     - ./traefik
+  traefik:
+    image: traefik:v3.2
+    ports:
+        # The HTTP port
+        - "80:80"
+        # The Web UI (enabled by --api.insecure=true)
+        - "8080:8080"
+    command: --api.insecure=true --providers.docker
+    volumes:
+      - ./traefik:/etc/traefik/
+      - ./logs:/var/log/traefik  # ログファイルをマウント
+  # whoami:
+  #   # A container that exposes an API to show its IP address
+  #   image: traefik/whoami
+  #   labels:
+  #     - "traefik.http.routers.whoami.rule=Host(`whoami.docker.localhost`)"
+
 
 volumes:
   nfs-data:
