@@ -29,6 +29,13 @@ go.work.sum
 #mysql
 /mysql/*
 !mysql/my.conf
+!mysql/my.cnf
+!mysql/init.sql
+!mysql/sample.sql
 
 /redis/*
 !redis/redis.conf
+
+/logs/*
+
+
