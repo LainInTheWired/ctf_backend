@@ -34,6 +34,14 @@ http:
       middlewares:
         - cors
         - gateway
+    team:
+      rule: "Host(`localhost`) && PathPrefix(`/team`)"
+      entryPoints:
+        - web
+      service: team
+      middlewares:
+        - cors
+        - gateway
 
       
   services:
@@ -80,7 +88,7 @@ http:
         address: "http://gateway:8000/auth"
         trustForwardHeader: true
         authResponseHeaders:
-          - "X-User-ID" 
+          - "X-User-ID"
     cors:
       headers:
         accessControlAllowOriginList:

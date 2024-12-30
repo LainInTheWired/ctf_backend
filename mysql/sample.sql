@@ -66,6 +66,7 @@ INSERT INTO contest_teams (contest_id, team_id) VALUES
 (1, 1),
 (1, 2),
 -- Gamma Team (id = 3) を Spring CTF 2024 (id = 2) に参加
+(2, 1),
 (2, 3);
 
 -- 9. questions テーブルへの挿入
@@ -79,20 +80,20 @@ INSERT INTO questions (name, category_id, env, description, vmid,answer) VALUES
 
 -- 10. contest_questions テーブルへの挿入
 -- Winter CTF 2024 (id = 1) に Crypto Challenge 1 (id = 1) と Web Challenge 1 (id = 3) を追加
-INSERT INTO contest_questions (id, contest_id, question_id, point) VALUES
-(1, 1, 1, 100),
-(2, 1, 3, 150),
+INSERT INTO contest_questions ( contest_id, question_id, point) VALUES
+( 1, 1, 100),
+( 1, 3, 150),
 -- Spring CTF 2024 (id = 2) に Reverse Engineering 1 (id = 2) と Forensics 1 (id = 4) を追加
-(3, 2, 2, 120),
-(4, 2, 4, 130);
+( 2, 2, 120),
+( 2, 4, 130);
 
 -- 11. cloudinit テーブルへの挿入
 -- 例: contest_questions_id = 1 (Crypto Challenge 1) に Alpha Team (id = 1) が対応
-INSERT INTO cloudinit (contest_questions_id, team_id, filename) VALUES
-(1, 1, 'alpha_crypto1_init.sh'),
-(2, 2, 'beta_web1_init.sh'),
-(3, 3, 'gamma_re_1_init.sh'),
-(4, 1, 'alpha_forensics1_init.sh');
+INSERT INTO cloudinit (contest_id,question_id, team_id, filename) VALUES
+(1,1, 1, 'alpha_crypto1_init.sh'),
+(1,3, 2, 'beta_web1_init.sh'),
+(2,2, 3, 'gamma_re_1_init.sh'),
+(2,4, 1, 'alpha_forensics1_init.sh');
 
 -- 12. points テーブルへの挿入
 -- 例: Alpha Team が Crypto Challenge 1 でポイントを獲得

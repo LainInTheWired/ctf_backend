@@ -141,14 +141,14 @@ func (m *mysqlRepository) SelectContestQuestions() ([]model.Question, error) {
 	var questions []model.Question
 	//  emailよりユーザ情報を取得
 	// rows, err := m.DB.Query("SELECT id,name,category_id,description,vmid FROM questions WEHERE id = ?", contestID)
-	rows, err := m.DB.Query("SELECT q.id,q.name,c.name,q.description,q.vmid FROM questions as q JOIN category AS c ON c.id = q.category_id")
+	rows, err := m.DB.Query("SELECT q.id,q.name,c.id,c.name,q.description,q.vmid FROM questions as q JOIN category AS c ON c.id = q.category_id")
 	if err != nil {
 		return nil, errors.Wrap(err, "error select contest")
 	}
 
 	for rows.Next() {
 		q := model.Question{}
-		if err := rows.Scan(&q.ID, &q.Name, &q.CategoryName, &q.Description, &q.VMID); err != nil {
+		if err := rows.Scan(&q.ID, &q.Name, &q.CategoryId, &q.CategoryName, &q.Description, &q.VMID); err != nil {
 			return nil, errors.Wrap(err, "failed to scan row")
 		}
 		questions = append(questions, q)

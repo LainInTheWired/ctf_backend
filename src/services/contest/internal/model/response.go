@@ -5,3 +5,5 @@ type ResponsePoints struct {
 	Name   string  `json:"name"`
 	Points []Point `json:"points"`
 }
+
+type ResponseIPs map[string][]string

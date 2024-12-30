@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"regexp"
 
 	"github.com/LainInTheWired/ctf_backend/contest/model"
 	"github.com/LainInTheWired/ctf_backend/contest/repository"
@@ -17,12 +18,17 @@ type ContestService interface {
 	DeleteTeamContest(c model.ContestsTeam) error
 	ListContest() ([]model.Contest, error)
 	ListContestByTeams(tid int) ([]model.Contest, error)
-	JoinContestQuesionts(ids []map[string]int) error
+	JoinListContestQuesionts(ContestQuestions []model.ContestQuestions) error
 	StartContest(cid int) error
 	GetPoints(cid int) ([]model.ResponsePoints, error)
 	CheckQuestion(cid int, qid int, tid int, ans string) (bool, error)
 	ListQuestionsByContestID(cid int, tid int) (*model.Contest, error)
 	GetTeamByUserID(cid int, uid int) ([]model.Team, error)
+	UpdateContestQuesionts(cq *model.ContestQuestions) error
+	StopContest(cid int) error
+	GetCloudinit(cid, tid, qid int) (*model.Cloudinit, error)
+	GetClusterResource() ([]model.ClusterResources, error)
+	AllDeleteVM() error
 }
 
 type contestService struct {
@@ -83,48 +89,176 @@ func (r *contestService) ListContestByTeams(tid int) ([]model.Contest, error) {
 	return contests, nil
 }
 
-func (r *contestService) JoinContestQuesionts(ids []map[string]int) error {
-	for _, id := range ids {
-		err := r.mysqlRepo.InsertContestsQuestions(id["qid"], id["cid"])
-		if err != nil {
-			return errors.Wrap(err, "can't delete team_contests")
+func (r *contestService) JoinListContestQuesionts(cqs []model.ContestQuestions) error {
+	// 送信された question_id のリストを取得
+	incomingQuestionIDs := make([]int, len(cqs))
+	incomingQuestionMap := make(map[int]model.ContestQuestions)
+	for i, q := range cqs {
+		incomingQuestionIDs[i] = q.QuestionID
+		incomingQuestionMap[q.QuestionID] = q
+	}
+	con, err := r.mysqlRepo.SelectContestQuestionsByContestID(cqs[0].ContestID)
+	if err != nil {
+		return errors.Wrap(err, "can't select ContestQuestions by ContestID")
+	}
+	existingQuestionMap := make(map[int]int) // question_id -> point
+	for _, q := range con.Questions {
+		existingQuestionMap[q.ID] = q.Point
+	}
+	for _, cq := range cqs {
+		if _, exists := existingQuestionMap[cq.QuestionID]; !exists {
+			// 新規追加
+			err := r.mysqlRepo.InsertContestsQuestions(&cq)
+			if err != nil {
+				return errors.Wrap(err, "can't Join Contest Questions")
+			}
 		}
+		// 既存のものは放置
+	}
+	for existingQID := range existingQuestionMap {
+		if _, exists := incomingQuestionMap[existingQID]; !exists {
+			// 新規追加
+			err := r.mysqlRepo.DeleteContestsQuestions(existingQID, cqs[0].ContestID)
+			if err != nil {
+				return errors.Wrap(err, "can't Delete Contest Questions")
+			}
+		}
+	}
+
+	return nil
+}
+func (r *contestService) UpdateContestQuesionts(cq *model.ContestQuestions) error {
+	err := r.mysqlRepo.UpdateContestsQuestions(cq)
+	if err != nil {
+		return errors.Wrap(err, "can't Upate Contest Questions")
 	}
 	return nil
 }
-
 func (r *contestService) StartContest(cid int) error {
 	teams, err := r.teamRepo.ListTeamUsersByContest(cid, nil)
 	if err != nil {
 		return errors.Wrap(err, "can't get ListTeamUsers")
 	}
 	fmt.Printf("%+v", teams)
-	questions, err := r.quesRepo.GetListQuestionsByContest(cid)
+	// questions, err := r.quesRepo.GetListQuestionsByContest(cid)
+	questions, err := r.mysqlRepo.SelectContestQuestionsByContestID(cid)
 	if err != nil {
 		return errors.Wrap(err, "can't get ListQuestions")
 	}
-
+	cluster, err := r.pveRepo.GetClusterResource()
+	if err != nil {
+		return errors.Wrap(err, "can't get cluster resouece")
+	}
+	mapcluster := map[string]model.ClusterResources{}
+	for _, c := range cluster {
+		if c.Type == "qemu" {
+			mapcluster[c.Name] = c
+		}
+	}
 	for _, team := range teams {
-		for _, ques := range questions {
+		for _, ques := range questions.Questions {
+			name := fmt.Sprintf("%d-%d-%d", cid, team.ID, ques.ID)
+			fmt.Println("name: ", name)
+
+			if _, ok := mapcluster[name]; ok {
+				fmt.Println("skip clone vm")
+				fmt.Println(mapcluster[name])
+				continue
+			}
 			password, err := generatePassword(16)
 			if err != nil {
 				return errors.Wrap(err, "can't generate password")
 			}
-			name := fmt.Sprintf("%d-%d-%d", cid, team.ID, ques.ID)
 			m := model.QuesionRequest{
 				ID:       ques.VMID,
 				Name:     name,
 				Password: password,
 			}
-			if err := r.quesRepo.CloneQuestion(m); err != nil {
+			vmid, err := r.quesRepo.CloneQuestion(m)
+			if err != nil {
 				return errors.Wrap(err, "can't get ListQuestions")
 			}
-			// cloudinit := model.Cloudinit{
-			// 	ContestQuestionsID: ,
-			// }
-			// r.mysqlRepo.InsertCloudinit()
+			cloudinit := model.Cloudinit{
+				QuestionID: ques.ID,
+				ContestID:  cid,
+				Filename:   "",
+				TeamID:     team.ID,
+				VMID:       vmid,
+				Access:     password,
+			}
+			err = r.mysqlRepo.InsertCloudinit(cloudinit)
+			if err != nil {
+				errors.Wrap(err, "can't InsertCloudinit")
+			}
 		}
 	}
+	return nil
+}
+
+func (r *contestService) StopContest(cid int) error {
+	cloudinit, err := r.mysqlRepo.SelectCloudinitByContestID(cid)
+	if err != nil {
+		return errors.Wrap(err, "can't get Cloudinit")
+	}
+
+	for _, c := range cloudinit {
+		if err = r.quesRepo.DeleteVM(c.VMID); err != nil {
+			// return errors.Wrap(err, "can't get ListQuestions")
+		}
+		cloudinit := model.Cloudinit{
+			QuestionID: c.QuestionID,
+			ContestID:  cid,
+			TeamID:     c.TeamID,
+		}
+		err = r.mysqlRepo.DeleteCloudinit(cloudinit)
+		if err != nil {
+			errors.Wrap(err, "can't InsertCloudinit")
+		}
+	}
+
+	return nil
+}
+func (r *contestService) AllDeleteVM() error {
+	// cloudinit, err := r.mysqlRepo.SelectCloudinitByContestID(cid)
+	// if err != nil {
+	// 	return errors.Wrap(err, "can't get Cloudinit")
+	// }
+
+	cluster, err := r.pveRepo.GetClusterResource()
+	if err != nil {
+		return errors.Wrap(err, "can't get cluster resouece")
+	}
+
+	var pattern = regexp.MustCompile(`^\d+-\d+-\d+$`)
+	filterdcluster := []model.ClusterResources{}
+	for _, c := range cluster {
+		if pattern.MatchString(c.Name) {
+			filterdcluster = append(filterdcluster, c)
+		}
+	}
+	fmt.Println("フィルタリングされたアイテム:")
+	for _, item := range filterdcluster {
+		fmt.Println(item.Name, ":", item.Vmid)
+		if err = r.quesRepo.DeleteVM(item.Vmid); err != nil {
+			return errors.Wrap(err, "can't get ListQuestions")
+		}
+	}
+
+	// for _, c := range cloudinit {
+	// 	if err = r.quesRepo.DeleteVM(c.VMID); err != nil {
+	// 		// return errors.Wrap(err, "can't get ListQuestions")
+	// 	}
+	// 	cloudinit := model.Cloudinit{
+	// 		QuestionID: c.QuestionID,
+	// 		ContestID:  cid,
+	// 		TeamID:     c.TeamID,
+	// 	}
+	// 	err = r.mysqlRepo.DeleteCloudinit(cloudinit)
+	// 	if err != nil {
+	// 		errors.Wrap(err, "can't InsertCloudinit")
+	// 	}
+	// }
+
 	return nil
 }
 
@@ -133,8 +267,8 @@ func generatePassword(length int) (string, error) {
 		lowerLetters = "abcdefghijklmnopqrstuvwxyz"
 		upperLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		digits       = "0123456789"
-		symbols      = "!@#$%^&*"
-		allChars     = lowerLetters + upperLetters + digits + symbols
+		// symbols      = "!@#$%^&*"
+		allChars = lowerLetters + upperLetters + digits
 	)
 
 	password := make([]byte, length)
@@ -227,12 +361,29 @@ func (s *contestService) ListQuestionsByContestID(cid int, tid int) (*model.Cont
 			pointMap[point.QuestionID] = point.Point
 		}
 	}
+	// cloudinit, err := s.mysqlRepo.SelectCloudinitByContestIDAndTeamID(cid, tid)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "can't error")
+	// }
+
 	// contests.Questionsを更新
+	// cmap := map[int]int{}
+	// for _, c := range cloudinit {
+	// 	cmap[c.QuestionID] = c.VMID
+	// }
 	for i := range contests.Questions {
 		if point, exists := pointMap[contests.Questions[i].ID]; exists {
 			contests.Questions[i].CurrentPoint = point
 		}
+		// ips, err := s.pveRepo.GetIPByVMID(cmap[contests.Questions[i].ID])
+		// if err != nil {
+		// 	break
+		// }
+		// contests.Questions[i].IPs = *ips
+		// fmt.Println(ips)
+
 	}
+	fmt.Printf("%+v", contests)
 	return &contests, nil
 }
 
@@ -243,4 +394,25 @@ func (s *contestService) GetTeamByUserID(cid int, uid int) ([]model.Team, error)
 		return nil, nil
 	}
 	return teams, nil
+}
+
+func (s *contestService) GetCloudinit(cid, tid, qid int) (*model.Cloudinit, error) {
+	cloudinit, err := s.mysqlRepo.SelectCloudinitByContestIDAndTeamIDAndQuestionID(cid, tid, qid)
+	if err != nil {
+		return nil, errors.Wrap(err, "errors")
+	}
+	ips, err := s.pveRepo.GetIPByVMID(cloudinit.VMID)
+	if err != nil {
+		return nil, errors.Wrap(err, "errors")
+	}
+	cloudinit.IPs = *ips
+	return cloudinit, nil
+}
+
+func (s *contestService) GetClusterResource() ([]model.ClusterResources, error) {
+	cluster, err := s.pveRepo.GetClusterResource()
+	if err != nil {
+		return nil, errors.Wrap(err, "can't get error")
+	}
+	return cluster, nil
 }

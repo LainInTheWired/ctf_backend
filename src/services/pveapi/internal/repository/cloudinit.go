@@ -41,6 +41,7 @@ func (r *pveRepository) CloudinitGenerator(fname string, host string, fqdn strin
 		Packages: []string{
 			"git",
 			"curl",
+			"qemu-guest-agent",
 		},
 	}
 	fmt.Printf("%+v", users)

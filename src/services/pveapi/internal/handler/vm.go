@@ -63,6 +63,7 @@ type CloudinitRequest struct {
 	Hostname  string   `json:"hostname" validation:"required"`
 	Sshkeys   []string `json:"sshkeys"`
 	SshPwauth string   `json:"ssh_pwauth"`
+	Username  string   `json:"username"`
 	Passwd    string   `json:"passwd"`
 }
 
@@ -205,7 +206,7 @@ func (h *PVEHandler) Cloudinit(c echo.Context) error {
 	}
 
 	users := []model.User{{
-		Name:              "user",
+		Name:              req.Username,
 		Sudo:              "ALL=(ALL) NOPASSWD:ALL",
 		Shell:             "/bin/bash",
 		PlainTextPasswd:   req.Passwd,
@@ -280,6 +281,36 @@ func (h *PVEHandler) ToTemplate(c echo.Context) error {
 		Data: "success to template",
 	}
 	return c.JSON(http.StatusOK, resq)
+}
+
+func (h *PVEHandler) GetIps(c echo.Context) error {
+	// リクエストから構造体にデータをコピー
+	svid := c.Param("vmid")
+	vid, err := strconv.Atoi(svid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	ips, err := h.serv.GetIps(vid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	// resq := &SuccessResponse{
+	// 	Data: json.Marshal(ips),
+	// }
+	return c.JSON(http.StatusOK, ips)
+}
+func (h *PVEHandler) GetClusterResource(c echo.Context) error {
+	cluster, err := h.serv.GetClusterResource()
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusOK, cluster)
 }
 
 // func (h *PVEHandler) GETTestHander(c echo.Context) error {

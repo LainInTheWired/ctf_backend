@@ -17,6 +17,10 @@ type MysqlRepository interface {
 	InsertContestTeams(ct model.ContestTeams) error
 	SelectTeamUsersInContest(cid int) ([]model.Team, error)
 	SelectTeamUsersInContestByUserID(cid, uid int) ([]model.Team, error)
+	SelectUsers() ([]model.User, error)
+	SelectUsersInTeamID(tid int) ([]model.User, error)
+	InsertTeamUsers(uid, tid int) error
+	DeleteTeamUsers(uid, tid int) error
 }
 
 func NewMysqlRepository(db *sql.DB) MysqlRepository {
@@ -226,4 +230,94 @@ func (m *mysqlRepository) SelectTeamUsersInContestByUserID(cid, uid int) ([]mode
 	}
 
 	return teams, nil
+}
+
+func (m *mysqlRepository) SelectUsers() ([]model.User, error) {
+	users := []model.User{}
+	rows, err := m.DB.Query("SELECT id,name,email FROM users")
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't Select Users")
+	}
+	for rows.Next() {
+		var (
+			id    int
+			name  string
+			email string
+		)
+		if err := rows.Scan(&id, &name, &email); err != nil {
+			return nil, errors.Wrap(err, "can't Scan error")
+		}
+		user := model.User{
+			ID:    id,
+			Name:  name,
+			Email: email,
+		}
+		users = append(users, user)
+
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating users rows")
+	}
+	return users, nil
+}
+
+func (m *mysqlRepository) SelectUsersInTeamID(tid int) ([]model.User, error) {
+	users := []model.User{}
+	rows, err := m.DB.Query("SELECT u.id,u.name,u.email from team_users as tu join user as u ON u.id = tu.user_id WHERE tu.team_id = ?", tid)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't Select Users")
+	}
+	for rows.Next() {
+		var (
+			id    int
+			name  string
+			email string
+		)
+		if err := rows.Scan(&id, &name, &email); err != nil {
+			return nil, errors.Wrap(err, "can't Scan error")
+		}
+		user := model.User{
+			ID:    id,
+			Name:  name,
+			Email: email,
+		}
+		users = append(users, user)
+
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error iterating users rows")
+	}
+	return users, nil
+}
+func (m *mysqlRepository) InsertTeamUsers(uid, tid int) error {
+	ins, err := m.DB.Prepare("INSERT INTO team_users (team_id,user_id)  VALUES(?,?)")
+	if err != nil {
+		return errors.Wrap(err, "team users insert error")
+	}
+	defer ins.Close()
+
+	_, err = ins.Exec(tid, uid)
+	if err != nil {
+		return errors.Wrap(err, "can't insert team Users")
+	}
+	return nil
+}
+func (m *mysqlRepository) DeleteTeamUsers(uid, tid int) error {
+	// DELETE文を直接実行（Prepareは必要に応じて使用）
+	_, err := m.DB.Exec("DELETE FROM team_users WHERE team_id = ? AND user_id = ?", tid, uid)
+	if err != nil {
+		return errors.Wrap(err, "team delete error")
+	}
+
+	// 影響を受けた行数を取得
+	// rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to retrieve affected rows")
+	}
+
+	// 影響を受けた行数が0の場合、対象のIDが存在しない
+	// if rowsAffected == 0 {
+	// 	return errors.New("no contest found with the given ID")
+	// }
+	return nil
 }

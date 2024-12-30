@@ -22,6 +22,8 @@ type PVEService interface {
 	TransferFileViaSCP(fname string) error
 	Template(vmid int) error
 	DeleteCloudinitFile(fname string) error
+	GetIps(vmid int) (map[string][]string, error)
+	GetClusterResource() ([]model.ClusterResources, error)
 }
 
 func NewPVEService(r repository.PVERepository) PVEService {
@@ -150,6 +152,7 @@ func (p *pveService) fiveEditVM(conf *model.VMEdit) error {
 		} else {
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
@@ -163,6 +166,7 @@ func (p *pveService) fiveDeleteVM(conf *model.VMDelete) error {
 		} else {
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
@@ -236,4 +240,31 @@ func (p *pveService) Template(vmid int) error {
 		return errors.Wrap(err, "can't to template")
 	}
 	return nil
+}
+
+func (p *pveService) GetIps(vmid int) (map[string][]string, error) {
+	ips := map[string][]string{}
+	node, err := p.SearchNodeByVmid(vmid)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't found err")
+	}
+	GetNetIntFormQumeAgent, err := p.pveRepo.GetNetIntFormQumeAgent(node, vmid)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't get int")
+	}
+	fmt.Printf("ips:   %+v", GetNetIntFormQumeAgent)
+	for _, results := range GetNetIntFormQumeAgent {
+		for _, reips := range results.IPAddresses {
+			ips[results.Name] = append(ips[results.Name], reips.IPAddress)
+		}
+	}
+	return ips, nil
+}
+
+func (p *pveService) GetClusterResource() ([]model.ClusterResources, error) {
+	res, err := p.pveRepo.GetClusterResourcesList()
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }

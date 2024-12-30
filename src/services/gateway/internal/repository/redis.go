@@ -27,6 +27,7 @@ type RedisRepository interface {
 	Set(key string, value interface{}, expiration time.Duration) error
 	Get(key string) (string, error)
 	Delete(key string) error
+	Expire(key string, expiration time.Duration) error
 }
 
 type redisRepository struct {
@@ -59,4 +60,14 @@ func (r *redisRepository) Get(key string) (string, error) {
 
 func (r *redisRepository) Delete(key string) error {
 	return errors.Wrap(r.cli.Del(r.ctx, key).Err(), "error delete redis")
+}
+
+func (r *redisRepository) Expire(key string, expiration time.Duration) error {
+	// キーの有効期限を延長
+	err := r.cli.Expire(r.ctx, key, expiration).Err()
+	if err != nil {
+		return errors.Wrap(err, "can't extension ttl")
+	}
+	return nil
+
 }

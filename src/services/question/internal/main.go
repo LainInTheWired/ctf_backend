@@ -210,6 +210,7 @@ func main() {
 	e.GET("/question", h.GetQuestions)
 
 	e.POST("/question/clone", h.CloneQuestion)
+	e.DELETE("/question/clone", h.DeleteVM)
 
 	// e.POST("/contest", h.CreateContest)
 	// e.DELETE("/contest", h.DeleteContest)

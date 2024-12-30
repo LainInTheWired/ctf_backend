@@ -35,6 +35,7 @@ type CreateQuestion struct {
 	IP          string   `json:"ip" validate:"cidr"`
 	Gateway     string   `json:"gateway" validate:"ip"`
 	CategoryId  int      `json:"category_id"`
+	Username    string   `json:"username"`
 	Password    string   `json:"password"`
 }
 
@@ -53,6 +54,7 @@ type CloudinitResponse struct {
 	Filename  string   `json:"filename"`
 	Hostname  string   `json:"hostname"`
 	Sshkeys   []string `json:"sshkeys"`
+	Username  string   `json:"username"`
 	Password  string   `json:"passwd"`
 	SshPwauth string   `json:"ssh_pwauth"`
 }

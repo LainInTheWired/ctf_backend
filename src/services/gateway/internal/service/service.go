@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/LainInTheWired/ctf_backend/gateway/model"
 	"github.com/LainInTheWired/ctf_backend/gateway/repository"
@@ -47,6 +48,9 @@ func (s *gatewayService) GetUserID(sessionid string) (int, error) {
 func (s *gatewayService) GetRoles(userid int) ([]model.Role, error) {
 	jusers, err := s.rerepo.Get(fmt.Sprintf("user:%d", userid))
 	if err != nil {
+		return nil, errors.Wrap(err, "")
+	}
+	if err := s.rerepo.Expire(fmt.Sprintf("user:%d", userid), time.Hour); err != nil {
 		return nil, errors.Wrap(err, "")
 	}
 	var users []model.User

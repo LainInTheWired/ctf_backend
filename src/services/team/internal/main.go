@@ -154,6 +154,14 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Validator = myvalidator.NewValidator()
+	// CORSミドルウェアの設定
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{"http://localhost:3000"}, // フロントエンドのURL
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+		ExposeHeaders:    []string{echo.HeaderContentLength},
+		AllowCredentials: true, // クッキーや認証情報を許可する場合
+	}))
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番では false にする
@@ -176,9 +184,14 @@ func main() {
 
 	fmt.Println(h, client)
 	e.GET("/team/:contestID", h.ListTeamByContest)
+	e.GET("/team/:contestID", h.ListTeamByContest)
+	e.GET("/team/users", h.ListUsers)
+
 	e.POST("/team", h.CreateTeam)
 	e.DELETE("/team/:id", h.DeleteTeam)
 	e.GET("/team/:contestID/user", h.ListTeamUserByContest)
+
+	// e.PUT("/team/:teamID")
 
 	// e.POST("/team_contests", h.JoinTeamsinContest)
 	// e.DELETE("/team_contests", h.DeleteTeamContest)

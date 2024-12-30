@@ -186,7 +186,7 @@ func main() {
 
 	fmt.Println(h)
 	e.POST("/contest", h.CreateContest)
-	e.DELETE("/contest", h.DeleteContest)
+	e.DELETE("/contest/:contestID", h.DeleteContest)
 	// e.POST("/team_contests", h.JoinTeamsinContest)
 	e.POST("/contest/:contestID/team", h.JoinTeamsinContest)
 	// e.DELETE("/team_contests", h.DeleteTeamContest)
@@ -197,8 +197,18 @@ func main() {
 	e.GET("/contest/:contestID/point", h.GetPoints)
 	// e.POST("/start", h.StartContest)
 	e.POST("/contest/:contestID/start", h.StartContest)
+	e.POST("/contest/:contestID/stop", h.StopContest)
+	// e.DELETE("/contest/:contestID/vm")
+
 	e.POST("/contest/:contestID/answer", h.CheckAnswer)
 	e.GET("/contest/:contestID", h.ListQuestionsByContestID)
+	e.POST("/contest/:contestID/question", h.JoinContestQuestions)
+	e.PUT("/contest/:contestID/question/:questionID", h.UpdateContestQuestions)
+	e.GET("/contest/:contestID/cloudinit/:questionID", h.GetCloudinit)
+	e.GET("/contest/cluster", h.GetClusterResource)
+
+	e.DELETE("/contest/vm", h.AllVMDelete)
+	// e.PUT("/contest/:contestID/question/:questionID",h.)
 
 	e.Start(":8000")
 }

@@ -129,26 +129,46 @@ type ClusterResources struct {
 	Vmid      int     `json:"vmid"`
 }
 
-// // type ClusterResources struct {
-// // 	Maxcpu    int     `json:"maxcpu"`
-// // 	Vmid      int     `json:"vmid"`
-// // 	Name      string  `json:"name"`
-// // 	Maxmem    int64   `json:"maxmem"`
-// // 	Disk      int     `json:"disk"`
-// // 	Diskwrite int64   `json:"diskwrite"`
-// // 	Maxdisk   int64   `json:"maxdisk"`
-// // 	Type      string  `json:"type"`
-// // 	ID        string  `json:"id"`
-// // 	Node      string  `json:"node"`
-// // 	Uptime    int     `json:"uptime"`
-// // 	Diskread  int     `json:"diskread"`
-// // 	Netin     int64   `json:"netin"`
-// // 	Status    string  `json:"status"`
-// // 	CPU       float64 `json:"cpu"`
-// // 	Netout    int64   `json:"netout"`
-// // 	Mem       int64   `json:"mem"`
-// // 	Template  int     `json:"template"`
-// // }
+type NetworkIntQumeAgent struct {
+	Statistics struct {
+		RxBytes   int `json:"rx-bytes"`
+		RxDropped int `json:"rx-dropped"`
+		RxErrs    int `json:"rx-errs"`
+		RxPackets int `json:"rx-packets"`
+		TxPackets int `json:"tx-packets"`
+		TxErrs    int `json:"tx-errs"`
+		TxDropped int `json:"tx-dropped"`
+		TxBytes   int `json:"tx-bytes"`
+	} `json:"statistics"`
+	Name            string `json:"name"`
+	HardwareAddress string `json:"hardware-address"`
+	IPAddresses     []struct {
+		IPAddressType string `json:"ip-address-type"`
+		Prefix        int    `json:"prefix"`
+		IPAddress     string `json:"ip-address"`
+	} `json:"ip-addresses"`
+}
+
+// type ClusterResources struct {
+// 	Maxcpu    int     `json:"maxcpu"`
+// 	Vmid      int     `json:"vmid"`
+// 	Name      string  `json:"name"`
+// 	Maxmem    int64   `json:"maxmem"`
+// 	Disk      int     `json:"disk"`
+// 	Diskwrite int64   `json:"diskwrite"`
+// 	Maxdisk   int64   `json:"maxdisk"`
+// 	Type      string  `json:"type"`
+// 	ID        string  `json:"id"`
+// 	Node      string  `json:"node"`
+// 	Uptime    int     `json:"uptime"`
+// 	Diskread  int     `json:"diskread"`
+// 	Netin     int64   `json:"netin"`
+// 	Status    string  `json:"status"`
+// 	CPU       float64 `json:"cpu"`
+// 	Netout    int64   `json:"netout"`
+// 	Mem       int64   `json:"mem"`
+// 	Template  int     `json:"template"`
+// }
 
 // type ClusterResources struct {
 // 	Uptime int64 `json:"uptime"`

@@ -15,8 +15,9 @@ import (
 
 type QuestionRepository interface {
 	GetListQuestionsByContest(cid int) ([]model.Question, error)
-	CloneQuestion(conf model.QuesionRequest) error
+	CloneQuestion(conf model.QuesionRequest) (int, error)
 	GetListQuestionsByQuestionID(qid int) (model.Question, error)
+	DeleteVM(vmid int) error
 }
 
 type questionRepository struct {
@@ -106,10 +107,61 @@ func (r *questionRepository) GetListQuestionsByQuestionID(qid int) (model.Questi
 	return question, nil
 }
 
-func (r *questionRepository) CloneQuestion(conf model.QuesionRequest) error {
+func (r *questionRepository) CloneQuestion(conf model.QuesionRequest) (int, error) {
 	// フォームデータの作成
 	endpoint := fmt.Sprintf("%s/question/clone", r.URL)
 	// フォームデータの作成
+
+	jsend, err := json.Marshal(conf)
+	if err != nil {
+		return 0, errors.Wrap(err, "can't change json")
+	}
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsend))
+	if err != nil {
+		return 0, xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/json")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return 0, xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// // json.Unmarshalでデコード
+	var pveresp model.QuesionResponse[int]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return 0, xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return 0, xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+	return pveresp.Data, nil
+}
+
+func (r *questionRepository) DeleteVM(vmid int) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/question/clone", r.URL)
+	// フォームデータの作成
+
+	conf := struct {
+		ID int
+	}{
+		ID: vmid,
+	}
 
 	jsend, err := json.Marshal(conf)
 	if err != nil {
@@ -117,7 +169,7 @@ func (r *questionRepository) CloneQuestion(conf model.QuesionRequest) error {
 	}
 
 	// 新しいPOSTリクエストの作成
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsend))
+	req, err := http.NewRequest("DELETE", endpoint, bytes.NewBuffer(jsend))
 	if err != nil {
 		return xerrors.Errorf("can't create http request: %w", err)
 	}
@@ -138,8 +190,8 @@ func (r *questionRepository) CloneQuestion(conf model.QuesionRequest) error {
 	// 	log.Fatalf("Error reading clone response body: %v", err)
 	// }
 
-	// // json.Unmarshalでデコード
-	// var pveresp model.[string]
+	// // // json.Unmarshalでデコード
+	// var pveresp model.QuesionResponse[int]
 	// if err := json.Unmarshal(body, &pveresp); err != nil {
 	// 	return xerrors.Errorf("can't unmarshal response body: %w", err)
 	// }

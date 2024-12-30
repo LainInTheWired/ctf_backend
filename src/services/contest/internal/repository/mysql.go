@@ -17,12 +17,18 @@ type MysqlRepository interface {
 	SelectContest() ([]model.Contest, error)
 	// SelectTeamsByContest(tid int) ([]model.Contest, error)
 	SelectContestsByTeamID(tid int) ([]model.Contest, error)
-	InsertContestsQuestions(qid, cid int) error
+	InsertContestsQuestions(cq *model.ContestQuestions) error
 	InsertCloudinit(contest model.Cloudinit) error
 	SelectPoint(cid int) ([]model.Point, error)
 	InsertPoint(tid int, qid int, cid int, point int) error
 	SelectContestQuestionsByContestID(cid int) (model.Contest, error)
 	SelectPointByTeamidAndContestid(cid int, tid int) ([]model.Point, error)
+	DeleteContestsQuestions(qid, cid int) error
+	UpdateContestsQuestions(cq *model.ContestQuestions) error
+	DeleteCloudinit(contest model.Cloudinit) error
+	SelectCloudinitByContestID(cid int) ([]model.Cloudinit, error)
+	SelectCloudinitByContestIDAndTeamID(cid, tid int) ([]model.Cloudinit, error)
+	SelectCloudinitByContestIDAndTeamIDAndQuestionID(cid, tid, qid int) (*model.Cloudinit, error)
 }
 
 func NewDBClient() (*sql.DB, error) {
@@ -64,15 +70,30 @@ func (r *mysqlRepository) InsertContest(contest model.Contest) error {
 
 func (r *mysqlRepository) InsertCloudinit(contest model.Cloudinit) error {
 	// emailが登録されているかチェック
-	ins, err := r.db.Prepare("INSERT INTO cloudinit (contest_questions_id,team_id,filename) VALUES(? ,?, ?)")
+	ins, err := r.db.Prepare("INSERT INTO cloudinit (contest_id,question_id,team_id,filename,access,vmid) VALUES(? ,?, ?, ?, ?, ?)")
 	if err != nil {
 		return errors.Wrap(err, "contest insert error")
 	}
 	defer ins.Close()
 
-	_, err = ins.Exec(contest.ContestQuestionsID, contest.TeamID, contest.Filename)
+	_, err = ins.Exec(contest.ContestID, contest.QuestionID, contest.TeamID, contest.Filename, contest.Access, contest.VMID)
 	if err != nil {
 		return errors.Wrap(err, "can't insert cloudinit")
+	}
+	return nil
+}
+
+func (r *mysqlRepository) DeleteCloudinit(contest model.Cloudinit) error {
+	// emailが登録されているかチェック
+	ins, err := r.db.Prepare("DELETE FROM cloudinit WHERE contest_id = ? AND question_id = ? AND team_id = ?")
+	if err != nil {
+		return errors.Wrap(err, "contest Delete error")
+	}
+	defer ins.Close()
+
+	_, err = ins.Exec(contest.ContestID, contest.QuestionID, contest.TeamID)
+	if err != nil {
+		return errors.Wrap(err, "can't Delete cloudinit")
 	}
 	return nil
 }
@@ -174,17 +195,50 @@ func (m *mysqlRepository) SelectContestsByTeamID(tid int) ([]model.Contest, erro
 	return contests, nil
 }
 
-func (m *mysqlRepository) InsertContestsQuestions(qid, cid int) error {
+func (m *mysqlRepository) InsertContestsQuestions(cq *model.ContestQuestions) error {
 	// emailが登録されているかチェック
-	ins, err := m.db.Prepare("INSERT INTO contest_questions (contest_id,question_id) VALUES(?,?)")
+	ins, err := m.db.Prepare("INSERT INTO contest_questions (contest_id,question_id,point) VALUES(?,?,?)")
 	if err != nil {
 		return errors.Wrap(err, "contest_teams insert error")
 	}
 	defer ins.Close()
 
-	_, err = ins.Exec(cid, qid)
+	_, err = ins.Exec(cq.ContestID, cq.QuestionID, cq.Point)
 	if err != nil {
 		return errors.Wrap(err, "can't insert contest_questions")
+	}
+	return nil
+}
+func (m *mysqlRepository) UpdateContestsQuestions(cq *model.ContestQuestions) error {
+	// emailが登録されているかチェック
+	ins, err := m.db.Prepare("UPDATE contest_questions SET point = ? WHERE contest_id = ? AND question_id = ?")
+	if err != nil {
+		return errors.Wrap(err, "contest_teams insert error")
+	}
+	defer ins.Close()
+
+	_, err = ins.Exec(cq.Point, cq.ContestID, cq.QuestionID)
+	if err != nil {
+		return errors.Wrap(err, "can't insert contest_questions")
+	}
+	return nil
+}
+func (r *mysqlRepository) DeleteContestsQuestions(qid, cid int) error {
+	// DELETE文を直接実行（Prepareは必要に応じて使用）
+	result, err := r.db.Exec("DELETE FROM contest_questions WHERE contest_id = ? AND question_id = ?", cid, qid)
+	if err != nil {
+		return errors.Wrap(err, "contest_questions delete error")
+	}
+
+	// 影響を受けた行数を取得
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to retrieve affected rows")
+	}
+
+	// 影響を受けた行数が0の場合、対象のIDが存在しない
+	if rowsAffected == 0 {
+		return errors.New("no contest found with the given ID")
 	}
 	return nil
 }
@@ -323,7 +377,7 @@ func (m *mysqlRepository) SelectContestQuestionsByContestID(cid int) (model.Cont
 			Point        int
 			Description  string
 			VMID         int
-			Answer       string
+			Answer       sql.NullString
 		)
 		// すべてのカラムをスキャン
 		if err := rows.Scan(&contestID, &contestName, &questionID, &questionName, &CategoryName, &Point, &Description, &VMID, &Answer); err != nil {
@@ -341,8 +395,10 @@ func (m *mysqlRepository) SelectContestQuestionsByContestID(cid int) (model.Cont
 			VMID:         VMID,
 			CategoryId:   CategoryID,
 			CategoryName: contestName,
-			Answer:       Answer,
 			// 必要に応じてPasswordフィールドも追加
+		}
+		if Answer.Valid {
+			question.Answer = Answer.String
 		}
 		contest.Questions = append(contest.Questions, question)
 	}
@@ -351,4 +407,108 @@ func (m *mysqlRepository) SelectContestQuestionsByContestID(cid int) (model.Cont
 	}
 
 	return contest, nil
+}
+
+func (m *mysqlRepository) SelectCloudinitByContestID(cid int) ([]model.Cloudinit, error) {
+	cs := []model.Cloudinit{}
+	rows, err := m.db.Query("SELECT question_id,contest_id,team_id,filename,access,vmid FROM cloudinit WHERE contest_id = ?", cid)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't Select Cloudinit")
+	}
+	for rows.Next() {
+		var (
+			QuestionID int
+			ContestID  int
+			TeamID     int
+			Filename   string
+			Access     string
+			VMID       int
+		)
+		if err := rows.Scan(&QuestionID, &ContestID, &TeamID, &Filename, &Access, &VMID); err != nil {
+			return nil, errors.Wrap(err, "SelectTeamUsersInContest: failed to scan row")
+		}
+		c := model.Cloudinit{
+			ContestID:  ContestID,
+			QuestionID: QuestionID,
+			TeamID:     TeamID,
+			Filename:   Filename,
+			Access:     Access,
+			VMID:       VMID,
+		}
+		cs = append(cs, c)
+
+	}
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "select errors")
+	}
+	return cs, nil
+}
+
+func (m *mysqlRepository) SelectCloudinitByContestIDAndTeamID(cid, tid int) ([]model.Cloudinit, error) {
+	cs := []model.Cloudinit{}
+	rows, err := m.db.Query("SELECT question_id,contest_id,team_id,filename,access,vmid FROM cloudinit WHERE contest_id = ? AND team_id = ?", cid, tid)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't Select Cloudinit")
+	}
+	for rows.Next() {
+		var (
+			QuestionID int
+			ContestID  int
+			TeamID     int
+			Filename   string
+			Access     string
+			VMID       int
+		)
+		if err := rows.Scan(&QuestionID, &ContestID, &TeamID, &Filename, &Access, &VMID); err != nil {
+			return nil, errors.Wrap(err, "SelectTeamUsersInContest: failed to scan row")
+		}
+		c := model.Cloudinit{
+			ContestID:  ContestID,
+			QuestionID: QuestionID,
+			TeamID:     TeamID,
+			Filename:   Filename,
+			Access:     Access,
+			VMID:       VMID,
+		}
+		cs = append(cs, c)
+
+	}
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "select errors")
+	}
+	return cs, nil
+}
+
+func (m *mysqlRepository) SelectCloudinitByContestIDAndTeamIDAndQuestionID(cid, tid, qid int) (*model.Cloudinit, error) {
+	c := model.Cloudinit{}
+	rows, err := m.db.Query("SELECT question_id,contest_id,team_id,filename,access,vmid FROM cloudinit WHERE contest_id = ? AND team_id = ? AND question_id = ?", cid, tid, qid)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't Select Cloudinit")
+	}
+	for rows.Next() {
+		var (
+			QuestionID int
+			ContestID  int
+			TeamID     int
+			Filename   string
+			Access     string
+			VMID       int
+		)
+		if err := rows.Scan(&QuestionID, &ContestID, &TeamID, &Filename, &Access, &VMID); err != nil {
+			return nil, errors.Wrap(err, "SelectTeamUsersInContest: failed to scan row")
+		}
+		c = model.Cloudinit{
+			ContestID:  ContestID,
+			QuestionID: QuestionID,
+			TeamID:     TeamID,
+			Filename:   Filename,
+			Access:     Access,
+			VMID:       VMID,
+		}
+
+	}
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "select errors")
+	}
+	return &c, nil
 }

@@ -203,6 +203,8 @@ func main() {
 	e.POST("/cloudinit", h.Cloudinit)
 	e.DELETE("/cloudinit", h.DeleteCloudinit)
 	e.POST("/template", h.ToTemplate)
+	e.GET("/vm/:vmid/ips", h.GetIps)
+	e.GET("/cluster", h.GetClusterResource)
 
 	// e.GET("/vm", h.GetVM)
 	// e.PUT("/vm", h.GETTestHander)

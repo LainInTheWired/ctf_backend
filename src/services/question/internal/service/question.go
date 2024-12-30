@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/LainInTheWired/ctf_backend/question/model"
@@ -17,10 +18,11 @@ type quesionService struct {
 type QuesionService interface {
 	CreateQuestion(q model.CreateQuestion) error
 	DeleteQuestion(qid int) error
-	CloneQuestion(q model.CreateQuestion) error
+	CloneQuestion(q model.CreateQuestion) (int, error)
 	GetQuestionsInContest(contestID int) ([]model.Question, error)
 	GetQuestions() ([]model.Question, error)
 	GetQuesionByID(qid int) (model.Question, error)
+	DeleteVM(vmid int) error
 }
 
 func NewQuestionService(r repository.MysqlRepository, p repository.PVEAPIRepository, t repository.TeamRepository) QuesionService {
@@ -38,6 +40,7 @@ func (s *quesionService) CreateQuestion(q model.CreateQuestion) error {
 		Hostname:  q.Name,
 		Sshkeys:   q.Sshkeys,
 		SshPwauth: "1",
+		Username:  q.Username,
 		Password:  q.Password,
 	}
 
@@ -51,6 +54,7 @@ func (s *quesionService) CreateQuestion(q model.CreateQuestion) error {
 		Cicustom: q.Name + ".yaml",
 		CPU:      q.CPUs,
 	}
+	fmt.Printf("%+v", vmconfig)
 
 	if err := s.pveapirepo.Cloudinit(clconf); err != nil {
 		return errors.Wrap(err, "can't create contest")
@@ -87,8 +91,22 @@ func (s *quesionService) Template(vmid int) {
 
 func (s *quesionService) DeleteQuestion(qid int) error {
 	// モデルの構造体に移し替えてから、repositoryに渡す
+	ques, err := s.myrepo.SelectQuesionByQuestionID(qid)
+	if err != nil {
+		return errors.Wrap(err, "can't Select Questinos")
+	}
+	if err := s.pveapirepo.DeleteVM(ques.VMID); err != nil {
+		return errors.Wrap(err, "can't Delete vm")
+	}
 	if err := s.myrepo.DeleteQuestion(qid); err != nil {
-		return errors.Wrap(err, "can't create contest")
+		return errors.Wrap(err, "can't Delete Question")
+	}
+	return nil
+}
+
+func (s *quesionService) DeleteVM(vmid int) error {
+	if err := s.pveapirepo.DeleteVM(vmid); err != nil {
+		return errors.Wrap(err, "can't Delete vm")
 	}
 	return nil
 }
@@ -111,13 +129,14 @@ func (s *quesionService) GetQuestionsInContest(contestID int) ([]model.Question,
 	return q, nil
 }
 
-func (s *quesionService) CloneQuestion(q model.CreateQuestion) error {
+func (s *quesionService) CloneQuestion(q model.CreateQuestion) (int, error) {
 	// モデルの構造体に移し替えてから、repositoryに渡す
 	clconf := &model.CloudinitResponse{
 		Filename:  q.Name + ".yaml",
 		Hostname:  q.Name,
 		Sshkeys:   q.Sshkeys,
 		SshPwauth: "1",
+		Username:  "user",
 		Password:  q.Password,
 	}
 
@@ -133,18 +152,17 @@ func (s *quesionService) CloneQuestion(q model.CreateQuestion) error {
 	}
 
 	if err := s.pveapirepo.Cloudinit(clconf); err != nil {
-		return errors.Wrap(err, "can't create contest")
+		return 0, errors.Wrap(err, "can't create contest")
 	}
-	_, err := s.pveapirepo.CreateVM(vmconfig)
-
+	svmid, err := s.pveapirepo.CreateVM(vmconfig)
 	if err != nil {
-		return errors.Wrap(err, "can't create contest")
+		return 0, errors.Wrap(err, "can't create contest")
 	}
 
-	// vmid, err := strconv.Atoi(svmid)
-	// if err != nil {
-	// 	return errors.Wrap(err, "can't Atoi vmid")
-	// }
+	vmid, err := strconv.Atoi(svmid)
+	if err != nil {
+		return 0, errors.Wrap(err, "can't Atoi vmid")
+	}
 
 	// ques := &model.Question{
 	// 	Name:        q.Name,
@@ -158,7 +176,7 @@ func (s *quesionService) CloneQuestion(q model.CreateQuestion) error {
 	// 	return errors.Wrap(err, "can't create contest")
 	// }
 
-	return nil
+	return vmid, nil
 }
 
 func (s *quesionService) GetQuesionByID(qid int) (model.Question, error) {

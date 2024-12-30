@@ -43,6 +43,7 @@ type PVERepository interface {
 	Shutdown(node string, vmid int) error
 	Template(node string, vmid int) error
 	DeleteFile(fname string) error
+	GetNetIntFormQumeAgent(node string, vmid int) ([]model.NetworkIntQumeAgent, error)
 }
 
 func NewPVERepository(conf *model.PVEConfig, client *http.Client) PVERepository {
@@ -184,6 +185,51 @@ func (r *pveRepository) EditVM(vmedit model.VMEdit) error {
 	return nil
 }
 
+func (r *pveRepository) DeleteStorageContest(node, storage, content string) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/nodes/%s/storage/%s/content/%s", r.pveConf.APIURL, node, storage, content)
+	// フォームデータの作成
+	formData := url.Values{}
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("DELETE", endpoint, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp model.ResponsePVE[string]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return errors.Newf("API Error: status code %d, response: %s, body: %s", resp.StatusCode, pveresp.Errors["errors"])
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
+
+	return nil
+}
+
+// この関数は使用していない
 func (r *pveRepository) GetVM(id string) (*model.VMConfig, error) {
 	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%s/config", r.pveConf.APIURL, "pve02", id)
 	formData := url.Values{}
@@ -379,6 +425,8 @@ func (r *pveRepository) GetClusterResourcesList() ([]model.ClusterResources, err
 	// クローン作成のUPIDを表示
 	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
 
+	fmt.Println("fiewajfioejwaofjipoeawjfpojewaio;fj")
+	fmt.Printf("%+v", pveresp.Data)
 	return pveresp.Data, nil
 }
 
@@ -561,4 +609,44 @@ func (r *pveRepository) Template(node string, vmid int) error {
 	log.Printf("template vm%s\n", pveresp.Data)
 
 	return nil
+}
+
+func (r *pveRepository) GetNetIntFormQumeAgent(node string, vmid int) ([]model.NetworkIntQumeAgent, error) {
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/agent/network-get-interfaces", r.pveConf.APIURL, node, vmid)
+	// formData := url.Values{}
+	fmt.Println(endpoint)
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return nil, xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return nil, xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	var getVMconfig model.ResponsePVE[struct {
+		Result []model.NetworkIntQumeAgent `json:"result"`
+	}]
+
+	err = json.Unmarshal([]byte(body), &getVMconfig)
+	if err != nil {
+		return nil, xerrors.Errorf("json Unmarshal error: %w", err)
+	}
+	return getVMconfig.Data.Result, nil
 }

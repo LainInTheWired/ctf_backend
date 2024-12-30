@@ -24,6 +24,12 @@ type ContestHander interface {
 	GetPoints(c echo.Context) error
 	CheckAnswer(c echo.Context) error
 	ListQuestionsByContestID(c echo.Context) error
+	JoinContestQuestions(c echo.Context) error
+	UpdateContestQuestions(c echo.Context) error
+	StopContest(c echo.Context) error
+	GetCloudinit(c echo.Context) error
+	GetClusterResource(c echo.Context) error
+	AllVMDelete(c echo.Context) error
 }
 
 type contestHander struct {
@@ -50,9 +56,13 @@ type listContestResponse struct {
 	EndDate   time.Time `json:"end_date"`
 }
 type joinContestQuesiontsRequest struct {
-	QID int `json:"qid"`
-	CID int `json:"cid"`
+	QID   int `json:"qid" validate:"required"`
+	Point int `json:"point" validate:"required,min=0"`
 }
+type updateContestQuesionts struct {
+	Point int `json:"point" validate:"required,min=0"`
+}
+
 type startContestRequest struct {
 	contestID int `json:"contest_id"`
 }
@@ -116,21 +126,28 @@ func (h *contestHander) CreateContest(c echo.Context) error {
 }
 
 func (h *contestHander) DeleteContest(c echo.Context) error {
-	var req deleteContestRequest
-	if err := c.Bind(&req); err != nil {
+	// var req deleteContestRequest
+	scid := c.Param("contestID")
+	cid, err := strconv.Atoi(scid)
+	if err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	// データをバリデーションにかける
-	if err := c.Validate(req); err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
-	}
+	// if err := c.Bind(&req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	// // データをバリデーションにかける
+	// if err := c.Validate(req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
 
 	m := model.Contest{
-		ID: req.ID,
+		ID: cid,
 	}
 	if err := h.serv.DeleteContest(m); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
@@ -239,32 +256,85 @@ func (h *contestHander) ListContestByTeams(c echo.Context) error {
 }
 
 func (h *contestHander) JoinContestQuestions(c echo.Context) error {
-	reqs := new([]joinContestQuesiontsRequest)
+	reqs := make([]joinContestQuesiontsRequest, 0)
+	scid := c.Param("contestID")
+	cid, err := strconv.Atoi(scid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
 	if err := c.Bind(&reqs); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	// データをバリデーションにかける
-	if err := c.Validate(reqs); err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	for _, req := range reqs {
+		if err := c.Validate(req); err != nil {
+			wrappedErr := xerrors.Errorf(": %w", err)
+			log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+		}
 	}
-	qcids := []map[string]int{}
-	for _, req := range *reqs {
-		t := map[string]int{"qid": req.QID, "cid": req.CID}
-		qcids = append(qcids, t)
+	cqs := []model.ContestQuestions{}
+
+	for _, req := range reqs {
+		cq := model.ContestQuestions{
+			QuestionID: req.QID,
+			ContestID:  cid,
+			Point:      req.Point,
+		}
+		cqs = append(cqs, cq)
 	}
 
-	if err := h.serv.JoinContestQuesionts(qcids); err != nil {
+	// qcids := []map[string]int{}
+	// for _, req := range *req {
+	// 	t := map[string]int{"qid": req.QID, "cid": cid}
+	// 	qcids = append(qcids, t)
+	// }
+
+	if err := h.serv.JoinListContestQuesionts(cqs); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contests_quesions"))
 }
+func (h *contestHander) UpdateContestQuestions(c echo.Context) error {
+	var req updateContestQuesionts
+	scid := c.Param("contestID")
+	cid, err := strconv.Atoi(scid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+	sqid := c.Param("questionID")
+	qid, err := strconv.Atoi(sqid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+	if err := c.Bind(&req); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	// データをバリデーションにかける
+	if err := c.Validate(req); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
 
+	cq := &model.ContestQuestions{
+		ContestID:  cid,
+		QuestionID: qid,
+		Point:      req.Point,
+	}
+	if err := h.serv.UpdateContestQuesionts(cq); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contests_quesions"))
+}
 func (h *contestHander) StartContest(c echo.Context) error {
 	sid := c.Param("contestID")
 	id, err := strconv.Atoi(sid)
@@ -292,7 +362,33 @@ func (h *contestHander) StartContest(c echo.Context) error {
 
 	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contests_quesions"))
 }
+func (h *contestHander) StopContest(c echo.Context) error {
+	scid := c.Param("contestID")
+	cid, err := strconv.Atoi(scid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+	var req startContestRequest
+	if err := c.Bind(&req); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	// データをバリデーションにかける
+	if err := c.Validate(req); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
 
+	if err := h.serv.StopContest(cid); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
+	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contests_quesions"))
+}
 func (h *contestHander) GetPoints(c echo.Context) error {
 	sid := c.Param("contestID")
 	id, err := strconv.Atoi(sid)
@@ -387,5 +483,61 @@ func (h *contestHander) ListQuestionsByContestID(c echo.Context) error {
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
+	fmt.Printf("%+v", points)
+
 	return c.JSON(http.StatusAccepted, points)
+}
+
+func (h *contestHander) GetCloudinit(c echo.Context) error {
+	scid := c.Param("contestID")
+	cid, err := strconv.Atoi(scid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+	sqid := c.Param("questionID")
+	qid, err := strconv.Atoi(sqid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+	suid := c.Request().Header.Get("X-User-ID")
+	uid, err := strconv.Atoi(suid)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{
+			"error": "User ID not found",
+		})
+	}
+	teams, err := h.serv.GetTeamByUserID(cid, uid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
+	cloudinit, err := h.serv.GetCloudinit(cid, teams[0].ID, qid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusOK, cloudinit)
+}
+
+func (h *contestHander) GetClusterResource(c echo.Context) error {
+	cluster, err := h.serv.GetClusterResource()
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusOK, cluster)
+}
+
+func (h *contestHander) AllVMDelete(c echo.Context) error {
+	err := h.serv.AllDeleteVM()
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusOK, nil)
 }

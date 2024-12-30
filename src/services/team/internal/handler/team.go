@@ -17,6 +17,7 @@ type TeamHander interface {
 	DeleteTeam(c echo.Context) error
 	ListTeamByContest(c echo.Context) error
 	ListTeamUserByContest(c echo.Context) error
+	ListUsers(c echo.Context) error
 }
 
 type teamHander struct {
@@ -24,7 +25,8 @@ type teamHander struct {
 }
 
 type createTeamRequest struct {
-	Name string `json:"name" validate:"required"`
+	Name    string `json:"name" validate:"required"`
+	UserIDs []int  `json:user_ids`
 }
 
 type deleteTeamRequest struct {
@@ -175,4 +177,15 @@ func (t *teamHander) ListTeamUserByContest(c echo.Context) error {
 
 	fmt.Printf("%+v", teams[0])
 	return c.JSON(http.StatusOK, teams)
+}
+
+func (t *teamHander) ListUsers(c echo.Context) error {
+	users, err := t.serv.ListUsers()
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
+	return c.JSON(http.StatusOK, users)
 }

@@ -18,16 +18,17 @@ type User struct {
 }
 
 type Question struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	CategoryId   int    `json:"category_id"`
-	Description  string `json:"description"`
-	VMID         int    `json:"vmid"`
-	Env          string `json:"env"`
-	Answer       string `json:"answer"`
-	Point        int    `json:"point"`
-	CategoryName string `json:"category_name"`
-	CurrentPoint int    `json:"current_point,omitempty"`
+	ID           int                 `json:"id"`
+	Name         string              `json:"name"`
+	CategoryId   int                 `json:"category_id"`
+	Description  string              `json:"description"`
+	VMID         int                 `json:"vmid"`
+	Env          string              `json:"env"`
+	Answer       string              `json:"answer"`
+	Point        int                 `json:"point"`
+	CategoryName string              `json:"category_name"`
+	CurrentPoint int                 `json:"current_point,omitempty"`
+	IPs          map[string][]string `json:"ips"`
 }
 
 type QuesionRequest struct {
@@ -46,7 +47,16 @@ type QuesionRequest struct {
 }
 
 type Cloudinit struct {
-	ContestQuestionsID int
-	TeamID             int
-	Filename           string
+	QuestionID int                 `json:"question_id"`
+	ContestID  int                 `json:"contest_id"`
+	TeamID     int                 `json:"team_id"`
+	Filename   string              `json:"filename"`
+	Access     string              `json:"access"`
+	VMID       int                 `json:"vmid"`
+	IPs        map[string][]string `json:"ips,omitempty"`
+}
+
+type QuesionResponse[T any] struct {
+	Data  T      `json:"data"`
+	Error string `json:"error"`
 }

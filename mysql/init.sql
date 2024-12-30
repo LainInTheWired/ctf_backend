@@ -91,23 +91,27 @@ CREATE TABLE points (
 
 -- 'contest_questions'
 CREATE TABLE contest_questions (
-    id          INT UNSIGNED NOT NULL PRIMARY KEY,
     contest_id INT UNSIGNED NOT NULL,
     question_id INT UNSIGNED NOT NULL,
     point INT NOT NULL,
     create_date    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_date    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (contest_id) REFERENCES contests(id) ON DELETE CASCADE,
-    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    PRIMARY KEY (contest_id,question_id) 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- 'cloudinit'
 CREATE TABLE cloudinit (
-    contest_questions_id    INT UNSIGNED NOT NULL PRIMARY KEY,
+    contest_id INT UNSIGNED NOT NULL,
+    question_id INT UNSIGNED NOT NULL,
     team_id                 INT UNSIGNED NOT NULL,
     filename                VARCHAR(255) NOT NULL,
     access                  VARCHAR(255),
-    FOREIGN KEY (contest_questions_id) REFERENCES contest_questions(id) ON DELETE CASCADE,
+    vmid                    INT,
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+    FOREIGN KEY (contest_id) REFERENCES contests(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    PRIMARY KEY (contest_id,question_id,team_id), 
     create_date    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_date    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
