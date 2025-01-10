@@ -187,10 +187,10 @@ func main() {
 	fmt.Println(h)
 	e.POST("/contest", h.CreateContest)
 	e.DELETE("/contest/:contestID", h.DeleteContest)
-	// e.POST("/team_contests", h.JoinTeamsinContest)
+	e.POST("/contest/:contestID/team/:teamID", h.JoinTeamsinContest)
 	e.POST("/contest/:contestID/team", h.JoinTeamsinContest)
 	// e.DELETE("/team_contests", h.DeleteTeamContest)
-	e.DELETE("/contest/:contestID/team", h.DeleteTeamContest)
+	e.DELETE("/contest/:contestID/team/:teamID", h.DeleteTeamContest)
 
 	e.GET("/contest", h.ListContest)
 	e.GET("/contest/:contestID/team", h.ListContestByTeams)

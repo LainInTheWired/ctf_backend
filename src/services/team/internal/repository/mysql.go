@@ -11,7 +11,7 @@ type mysqlRepository struct {
 	DB *sql.DB
 }
 type MysqlRepository interface {
-	InsertTeam(team model.Team) error
+	InsertTeam(team model.Team) (int, error)
 	DeleteTeam(team model.Team) error
 	SelectTeamInContest(cid int) ([]model.Team, error)
 	InsertContestTeams(ct model.ContestTeams) error
@@ -19,8 +19,9 @@ type MysqlRepository interface {
 	SelectTeamUsersInContestByUserID(cid, uid int) ([]model.Team, error)
 	SelectUsers() ([]model.User, error)
 	SelectUsersInTeamID(tid int) ([]model.User, error)
-	InsertTeamUsers(uid, tid int) error
-	DeleteTeamUsers(uid, tid int) error
+	InsertTeamUsers(tid, uid int) error
+	DeleteTeamUsers(tid, uid int) error
+	UpdateTeam(t model.Team) error
 }
 
 func NewMysqlRepository(db *sql.DB) MysqlRepository {
@@ -29,18 +30,22 @@ func NewMysqlRepository(db *sql.DB) MysqlRepository {
 	}
 }
 
-func (m *mysqlRepository) InsertTeam(team model.Team) error {
+func (m *mysqlRepository) InsertTeam(team model.Team) (int, error) {
 	ins, err := m.DB.Prepare("INSERT INTO teams (name)  VALUES(?)")
 	if err != nil {
-		return errors.Wrap(err, "team insert error")
+		return 0, errors.Wrap(err, "team insert error")
 	}
 	defer ins.Close()
 
-	_, err = ins.Exec(team.Name)
+	result, err := ins.Exec(team.Name)
 	if err != nil {
-		return errors.Wrap(err, "can't insert team")
+		return 0, errors.Wrap(err, "can't insert team")
 	}
-	return nil
+	rid, err := result.LastInsertId()
+	if err != nil {
+		return 0, errors.Wrap(err, "can't get insert id")
+	}
+	return int(rid), nil
 }
 func (m *mysqlRepository) DeleteTeam(team model.Team) error {
 	// DELETE文を直接実行（Prepareは必要に応じて使用）
@@ -263,7 +268,7 @@ func (m *mysqlRepository) SelectUsers() ([]model.User, error) {
 
 func (m *mysqlRepository) SelectUsersInTeamID(tid int) ([]model.User, error) {
 	users := []model.User{}
-	rows, err := m.DB.Query("SELECT u.id,u.name,u.email from team_users as tu join user as u ON u.id = tu.user_id WHERE tu.team_id = ?", tid)
+	rows, err := m.DB.Query("SELECT u.id,u.name,u.email from team_users as tu join users as u ON u.id = tu.user_id WHERE tu.team_id = ?", tid)
 	if err != nil {
 		return nil, errors.Wrap(err, "Can't Select Users")
 	}
@@ -289,7 +294,7 @@ func (m *mysqlRepository) SelectUsersInTeamID(tid int) ([]model.User, error) {
 	}
 	return users, nil
 }
-func (m *mysqlRepository) InsertTeamUsers(uid, tid int) error {
+func (m *mysqlRepository) InsertTeamUsers(tid, uid int) error {
 	ins, err := m.DB.Prepare("INSERT INTO team_users (team_id,user_id)  VALUES(?,?)")
 	if err != nil {
 		return errors.Wrap(err, "team users insert error")
@@ -302,7 +307,7 @@ func (m *mysqlRepository) InsertTeamUsers(uid, tid int) error {
 	}
 	return nil
 }
-func (m *mysqlRepository) DeleteTeamUsers(uid, tid int) error {
+func (m *mysqlRepository) DeleteTeamUsers(tid, uid int) error {
 	// DELETE文を直接実行（Prepareは必要に応じて使用）
 	_, err := m.DB.Exec("DELETE FROM team_users WHERE team_id = ? AND user_id = ?", tid, uid)
 	if err != nil {
@@ -319,5 +324,20 @@ func (m *mysqlRepository) DeleteTeamUsers(uid, tid int) error {
 	// if rowsAffected == 0 {
 	// 	return errors.New("no contest found with the given ID")
 	// }
+	return nil
+}
+
+func (m *mysqlRepository) UpdateTeam(t model.Team) error {
+	// emailが登録されているかチェック
+	ins, err := m.DB.Prepare("UPDATE teams SET name = ? WHERE id = ?")
+	if err != nil {
+		return errors.Wrap(err, "teams update error")
+	}
+	defer ins.Close()
+
+	_, err = ins.Exec(t.Name, t.ID)
+	if err != nil {
+		return errors.Wrap(err, "can't insert teams")
+	}
 	return nil
 }

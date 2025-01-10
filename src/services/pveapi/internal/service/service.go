@@ -24,6 +24,7 @@ type PVEService interface {
 	DeleteCloudinitFile(fname string) error
 	GetIps(vmid int) (map[string][]string, error)
 	GetClusterResource() ([]model.ClusterResources, error)
+	EditVMACL() error
 }
 
 func NewPVEService(r repository.PVERepository) PVEService {
@@ -118,6 +119,11 @@ func (p *pveService) CreateCloudinitVM(name string, size int, vmconf *model.VMEd
 		return 0, errors.Wrap(err, "can't clone vm")
 	}
 
+	// 追加 ACL
+	if err := p.pveRepo.EditVMACL(vmid); err != nil {
+		return 0, errors.Wrap(err, "can't edit acl")
+	}
+
 	// err = p.EditVM(*vmconf)
 	err = p.fiveEditVM(vmconf)
 	if err != nil {
@@ -129,7 +135,6 @@ func (p *pveService) CreateCloudinitVM(name string, size int, vmconf *model.VMEd
 		err = p.pveRepo.ResizeDisk(vmconf.Node, "scsi0", size, vmid)
 		if err != nil {
 			p.fiveDeleteVM(&model.VMDelete{Vmid: vmid, Node: vmconf.Node})
-
 			return 0, errors.Wrap(err, "can't resize vm disk")
 		}
 	}
@@ -144,6 +149,7 @@ func (p *pveService) CreateCloudinitVM(name string, size int, vmconf *model.VMEd
 
 func (p *pveService) fiveEditVM(conf *model.VMEdit) error {
 	for i := 0; i < 5; i++ {
+		time.Sleep(5 * time.Second)
 		if err := p.pveRepo.EditVM(*conf); err != nil {
 			fmt.Println(i)
 			if i > 3 {
@@ -152,13 +158,13 @@ func (p *pveService) fiveEditVM(conf *model.VMEdit) error {
 		} else {
 			break
 		}
-		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
 
 func (p *pveService) fiveDeleteVM(conf *model.VMDelete) error {
 	for i := 0; i < 5; i++ {
+		time.Sleep(5 * time.Second)
 		if err := p.pveRepo.DeleteVM(conf); err != nil {
 			if i > 3 {
 				return errors.Wrap(err, "can't error")
@@ -166,7 +172,6 @@ func (p *pveService) fiveDeleteVM(conf *model.VMDelete) error {
 		} else {
 			break
 		}
-		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
@@ -267,4 +272,12 @@ func (p *pveService) GetClusterResource() ([]model.ClusterResources, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+func (p *pveService) EditVMACL() error {
+	err := p.pveRepo.EditVMACL(137)
+	if err != nil {
+		return err
+	}
+	return nil
 }

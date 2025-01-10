@@ -23,6 +23,8 @@ type QuesionService interface {
 	GetQuestions() ([]model.Question, error)
 	GetQuesionByID(qid int) (model.Question, error)
 	DeleteVM(vmid int) error
+	GetQuesionIp(vmid int) (*model.ResponseIPs, error)
+	UpdateQuestion(q model.Question) error
 }
 
 func NewQuestionService(r repository.MysqlRepository, p repository.PVEAPIRepository, t repository.TeamRepository) QuesionService {
@@ -185,4 +187,20 @@ func (s *quesionService) GetQuesionByID(qid int) (model.Question, error) {
 		return model.Question{}, errors.Wrap(err, "can't get question by id")
 	}
 	return question, nil
+}
+
+func (s *quesionService) GetQuesionIp(vmid int) (*model.ResponseIPs, error) {
+	ips, err := s.pveapirepo.GetIPByVMID(vmid)
+	if err != nil {
+		return nil, errors.Wrap(err, "errors")
+	}
+	return ips, nil
+}
+
+func (s *quesionService) UpdateQuestion(q model.Question) error {
+	if err := s.myrepo.UpdateQuestion(q); err != nil {
+		return errors.Wrap(err, "errors")
+
+	}
+	return nil
 }

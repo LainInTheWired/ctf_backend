@@ -13,7 +13,7 @@ import (
 )
 
 type UserRepository interface {
-	CreateUser(user model.User) error
+	CreateUser(user model.User) (int, error)
 	GetUserByEmail(email string) (model.User, error)
 	GetUserByID(id int) (model.User, error)
 	CreatePermission(permission *model.Permission) error
@@ -47,29 +47,35 @@ func NewUserRepository(db *sql.DB) UserRepository {
 	}
 }
 
-func (u *userRepository) CreateUser(user model.User) error {
+func (u *userRepository) CreateUser(user model.User) (int, error) {
 	// emailが登録されているかチェック
 	if _, err := u.GetUserByEmail(user.Email); err == nil {
-		return errors.Wrap(err, "already regist email")
+		return 0, errors.Wrap(err, "already regist email")
 	}
 	// usersテーブルにinsertさせる
 	hashPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return errors.Wrap(err, "can't generate password hash")
+		return 0, errors.Wrap(err, "can't generate password hash")
 		// return xerrors.Errorf(": %w", err)
 	}
 	ins, err := u.DB.Prepare("INSERT INTO users (name,email,password) VALUES(? ,?, ?)")
 	if err != nil {
-		return errors.Wrap(err, "user insert error")
+		return 0, errors.Wrap(err, "user insert error")
 	}
 	defer ins.Close()
 
-	_, err = ins.Exec(user.Name, user.Email, hashPassword)
+	result, err := ins.Exec(user.Name, user.Email, hashPassword)
 	if err != nil {
-		return errors.Wrap(err, "can't insert user")
+		return 0, errors.Wrap(err, "can't insert user")
 	}
 
-	return nil
+	uid, err := result.LastInsertId()
+	if err != nil {
+		return 0, errors.Wrap(err, "can't get userid")
+
+	}
+
+	return int(uid), nil
 }
 
 func (u *userRepository) GetUserByEmail(email string) (model.User, error) {

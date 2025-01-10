@@ -204,7 +204,8 @@ func main() {
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	e.POST("/question", h.CreateQuestion)
-	e.DELETE("/question", h.DeleteQuestion)
+	e.DELETE("/question/:questionID", h.DeleteQuestion)
+	e.PUT("/question/:questionID", h.UpdateQuestion)
 
 	e.GET("/question/:id", h.GetQuestionsInContest)
 	e.GET("/question", h.GetQuestions)
@@ -212,6 +213,7 @@ func main() {
 	e.POST("/question/clone", h.CloneQuestion)
 	e.DELETE("/question/clone", h.DeleteVM)
 
+	e.GET("/question/ip/:vmid", h.GetQuesionIp)
 	// e.POST("/contest", h.CreateContest)
 	// e.DELETE("/contest", h.DeleteContest)
 	// e.POST("/team_contests", h.JoinTeamsinContest)

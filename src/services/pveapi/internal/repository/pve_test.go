@@ -113,10 +113,52 @@ func TestGetNodeList(t *testing.T) {
 		log.Fatal("必要な環境変数が設定されていません。PROXMOX_API_URL および PROXMOX_AUTHORIZATION を設定してください。")
 	}
 
-	r := NewPVEAPIRepository(config, client)
+	r := NewPVERepository(config, client)
 	a, err := r.GetNodeList()
 	if err != nil {
 		log.Fatal(err)
 	}
 	t.Log(a)
+}
+func TestEditVMACL(t *testing.T) {
+	// .envファイルを読み込む
+	err := godotenv.Load("../.env")
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	// proxmoxapi初期化処理
+	config := &model.PVEConfig{
+		APIURL:        os.Getenv("PROXMOX_API_URL"),
+		Authorization: os.Getenv("PROXMOX_API_TOKEN"),
+	}
+	// httpclinet auth middleware
+	// カスタムトランスポートを作成
+	// カスタム Transport を設定（InsecureSkipVerify は本番環境では false に）
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 本番では false にする
+	}
+
+	// カスタム AuthTransport を作成
+	authTransport := &MiddlewareTransport{
+		Transport: tr,
+		Token:     config.Authorization,
+	}
+	// カスタム HTTP クライアントの作成
+	client := &http.Client{
+		Transport: authTransport,
+		Timeout:   60 * time.Second,
+	}
+
+	// 設定のバリデーション
+	if config.APIURL == "" || config.Authorization == "" {
+		log.Fatal("必要な環境変数が設定されていません。PROXMOX_API_URL および PROXMOX_AUTHORIZATION を設定してください。")
+	}
+
+	r := NewPVERepository(config, client)
+	err = r.EditVMACL(137)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }

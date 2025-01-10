@@ -89,6 +89,9 @@ http:
         trustForwardHeader: true
         authResponseHeaders:
           - "X-User-ID"
+          - "X-Frontend-Path"
+
+        
     cors:
       headers:
         accessControlAllowOriginList:
@@ -104,6 +107,7 @@ http:
           - Content-Type
           - Accept
           - Authorization
+          - X-Frontend-Path
         accessControlAllowCredentials: true
 
       

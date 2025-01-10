@@ -21,6 +21,7 @@ type PVEAPIRepository interface {
 	Cloudinit(conf *model.CloudinitResponse) error
 	CreateVM(conf *model.CreateVM) (string, error)
 	DeleteVM(vmid int) error
+	GetIPByVMID(vmid int) (*model.ResponseIPs, error)
 }
 
 func NewPVEAPIRepository(h *http.Client, url string) PVEAPIRepository {
@@ -169,4 +170,34 @@ func (r *pveapiRepository) DeleteVM(vmid int) error {
 		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
 	}
 	return nil
+}
+func (r *pveapiRepository) GetIPByVMID(vmid int) (*model.ResponseIPs, error) {
+	endpoint := fmt.Sprintf("http://%s:8000/vm/%d/ips", r.URL, vmid)
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't create http request: %w")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "fail http request:")
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error reading clone response body: %w")
+	}
+
+	var ifs model.ResponseIPs
+	if err := json.Unmarshal(body, &ifs); err != nil {
+		return nil, errors.Wrap(err, "can't unmarshal response body: %w")
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return nil, errors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+	return &ifs, nil
 }

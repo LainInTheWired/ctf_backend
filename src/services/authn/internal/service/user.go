@@ -37,8 +37,13 @@ func NewUserService(userrepository repository.UserRepository, redisrepository re
 
 func (s *userService) Signup(u model.User) error {
 	// モデルの構造体に移し替えてから、repositoryに渡す
-	if err := s.usrepo.CreateUser(u); err != nil {
+	uid, err := s.usrepo.CreateUser(u)
+	if err != nil {
 		return errors.Wrap(err, "can't create user")
+	}
+	if err := s.BindUserRoles(uid, 3); err != nil {
+		return errors.Wrap(err, "can't bind user role")
+
 	}
 	return nil
 }
@@ -50,7 +55,6 @@ func (s *userService) Login(u model.User) (string, error) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(getUser.Password), []byte(u.Password)); err != nil {
 		return "", errors.Wrap(err, "authentication failed")
-
 	}
 	sessionID, err := NewSession(getUser.ID, s)
 	if err != nil {

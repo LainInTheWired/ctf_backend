@@ -66,3 +66,5 @@ type Point struct {
 	ContestID int `json:"contest_id"`
 	Point     int `json:"point"`
 }
+
+type ResponseIPs map[string][]string

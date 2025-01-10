@@ -205,6 +205,7 @@ func main() {
 	e.POST("/template", h.ToTemplate)
 	e.GET("/vm/:vmid/ips", h.GetIps)
 	e.GET("/cluster", h.GetClusterResource)
+	// e.PUT("/test/vmacl", h.EditVMACL)
 
 	// e.GET("/vm", h.GetVM)
 	// e.PUT("/vm", h.GETTestHander)

@@ -19,6 +19,8 @@ type QuesionHander interface {
 	GetQuestions(c echo.Context) error
 	CloneQuestion(c echo.Context) error
 	DeleteVM(c echo.Context) error
+	GetQuesionIp(c echo.Context) error
+	UpdateQuestion(c echo.Context) error
 }
 
 type quesionHander struct {
@@ -41,6 +43,11 @@ type quesionRequest struct {
 	Filename    string   `json:"filename"`
 }
 
+type updateQuestion struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Answer      string `json:"answer"`
+}
 type QuestionsInContestRequest struct {
 	ContestID int `json:"contest_id"`
 }
@@ -97,20 +104,27 @@ func (h *quesionHander) CreateQuestion(c echo.Context) error {
 }
 
 func (h *quesionHander) DeleteQuestion(c echo.Context) error {
-	var req quesionRequest
-	if err := c.Bind(&req); err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
-	}
-	// データをバリデーションにかける
-	if err := c.Validate(req); err != nil {
+	// var req quesionRequest
+	// if err := c.Bind(&req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	// // データをバリデーションにかける
+	// if err := c.Validate(req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	sqid := c.Param("questionID")
+	qid, err := strconv.Atoi(sqid)
+	if err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 
-	if err := h.serv.DeleteQuestion(req.ID); err != nil {
+	if err := h.serv.DeleteQuestion(qid); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
@@ -223,7 +237,59 @@ func (h *quesionHander) GetQuesionByID(c echo.Context) error {
 }
 
 func (h *quesionHander) DeleteVM(c echo.Context) error {
-	var req quesionRequest
+	// var req quesionRequest
+	// if err := c.Bind(&req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	// // データをバリデーションにかける
+	// if err := c.Validate(req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	sid := c.QueryParam("questionID")
+	id, err := strconv.Atoi(sid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	if err := h.serv.DeleteVM(id); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusAccepted, map[string]string{"data": "delete VM"})
+}
+
+func (h *quesionHander) GetQuesionIp(c echo.Context) error {
+	svmid := c.Param("vmid")
+	vmid, err := strconv.Atoi(svmid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	ip, err := h.serv.GetQuesionIp(vmid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusAccepted, map[string]interface{}{"data": *ip})
+}
+
+func (h *quesionHander) UpdateQuestion(c echo.Context) error {
+	var req updateQuestion
+	sid := c.Param("questionID")
+	id, err := strconv.Atoi(sid)
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
 	if err := c.Bind(&req); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
@@ -235,10 +301,18 @@ func (h *quesionHander) DeleteVM(c echo.Context) error {
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	if err := h.serv.DeleteVM(req.ID); err != nil {
+
+	q := model.Question{
+		ID:          id,
+		Name:        req.Name,
+		Description: req.Description,
+		Answer:      req.Answer,
+	}
+
+	if err := h.serv.UpdateQuestion(q); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	return c.JSON(http.StatusAccepted, map[string]string{"data": "delete VM"})
+	return c.JSON(http.StatusAccepted, map[string]string{"message": "success update question"})
 }

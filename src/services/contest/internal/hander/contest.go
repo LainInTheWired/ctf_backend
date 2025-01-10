@@ -160,7 +160,7 @@ func (h *contestHander) DeleteContest(c echo.Context) error {
 }
 
 func (h *contestHander) JoinTeamsinContest(c echo.Context) error {
-	var req contestJoinTeamRquest
+	// var req contestJoinTeamRquest
 	scid := c.Param("contestID")
 	cid, err := strconv.Atoi(scid)
 	if err != nil {
@@ -168,21 +168,28 @@ func (h *contestHander) JoinTeamsinContest(c echo.Context) error {
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	if err := c.Bind(&req); err != nil {
+	stid := c.Param("teamID")
+	tid, err := strconv.Atoi(stid)
+	if err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	// データをバリデーションにかける
-	if err := c.Validate(req); err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
-	}
+	// if err := c.Bind(&req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	// // データをバリデーションにかける
+	// if err := c.Validate(req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
 
 	m := model.ContestsTeam{
 		ContestID: cid,
-		TeamID:    req.TeamID,
+		TeamID:    tid,
 	}
 
 	if err := h.serv.CreateTeamContest(m); err != nil {
@@ -193,7 +200,7 @@ func (h *contestHander) JoinTeamsinContest(c echo.Context) error {
 	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "join contest_teams"))
 }
 func (h *contestHander) DeleteTeamContest(c echo.Context) error {
-	var req contestJoinTeamRquest
+	// var req contestJoinTeamRquest
 	scid := c.Param("contestID")
 	cid, err := strconv.Atoi(scid)
 	if err != nil {
@@ -201,21 +208,28 @@ func (h *contestHander) DeleteTeamContest(c echo.Context) error {
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	if err := c.Bind(&req); err != nil {
+	stid := c.Param("teamID")
+	tid, err := strconv.Atoi(stid)
+	if err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-	// データをバリデーションにかける
-	if err := c.Validate(req); err != nil {
-		wrappedErr := xerrors.Errorf(": %w", err)
-		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
-	}
+	// if err := c.Bind(&req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	// // データをバリデーションにかける
+	// if err := c.Validate(req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
 
 	m := model.ContestsTeam{
 		ContestID: cid,
-		TeamID:    req.TeamID,
+		TeamID:    tid,
 	}
 
 	if err := h.serv.DeleteTeamContest(m); err != nil {
@@ -475,6 +489,9 @@ func (h *contestHander) ListQuestionsByContestID(c echo.Context) error {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	if len(teams) == 0 {
+		return c.JSON(http.StatusForbidden, map[string]string{"message": "not join team"})
 	}
 	fmt.Printf("%+v", teams)
 	points, err := h.serv.ListQuestionsByContestID(cid, teams[0].ID)

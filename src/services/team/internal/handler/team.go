@@ -18,6 +18,7 @@ type TeamHander interface {
 	ListTeamByContest(c echo.Context) error
 	ListTeamUserByContest(c echo.Context) error
 	ListUsers(c echo.Context) error
+	EditTeam(c echo.Context) error
 }
 
 type teamHander struct {
@@ -26,7 +27,7 @@ type teamHander struct {
 
 type createTeamRequest struct {
 	Name    string `json:"name" validate:"required"`
-	UserIDs []int  `json:user_ids`
+	UserIDs []int  `json:"user_ids"`
 }
 
 type deleteTeamRequest struct {
@@ -71,17 +72,54 @@ func (t *teamHander) CreateTeam(c echo.Context) error {
 	m := model.Team{
 		Name: req.Name,
 	}
-	if err := t.serv.CreateTeam(m); err != nil {
+	tid, err := t.serv.CreateTeam(m, req.UserIDs)
+	if err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 
-	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "create teams "))
+	return c.JSON(http.StatusAccepted, map[string]string{"team_id": strconv.Itoa(tid)})
 }
 
 func (t *teamHander) DeleteTeam(c echo.Context) error {
-	var req deleteTeamRequest
+	// var req deleteTeamRequest
+	// if err := c.Bind(&req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	// // データをバリデーションにかける
+	// if err := c.Validate(req); err != nil {
+	// 	wrappedErr := xerrors.Errorf(": %w", err)
+	// 	log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+	// 	return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	// }
+	stid := c.Param("teamID")
+	tid, err := strconv.Atoi(stid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
+
+	m := model.Team{
+		ID: tid,
+	}
+
+	if err := t.serv.DeleteTeam(m); err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+
+	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "Delete teams "))
+}
+func (t *teamHander) EditTeam(c echo.Context) error {
+	var req createTeamRequest
+	stid := c.Param("teamID")
+	tid, err := strconv.Atoi(stid)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error: param")})
+	}
 	if err := c.Bind(&req); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
@@ -93,18 +131,21 @@ func (t *teamHander) DeleteTeam(c echo.Context) error {
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
-
 	m := model.Team{
-		ID: req.ID,
+		ID:   tid,
+		Name: req.Name,
 	}
 
-	if err := t.serv.DeleteTeam(m); err != nil {
+	if err := t.serv.EditTeam(m, req.UserIDs); err != nil {
 		wrappedErr := xerrors.Errorf(": %w", err)
 		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 
-	return c.JSON(http.StatusAccepted, fmt.Sprintf("message", "Delete teams "))
+	response := map[string]string{
+		"message": "success Edit Team",
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 func (t *teamHander) ListTeamByContest(c echo.Context) error {

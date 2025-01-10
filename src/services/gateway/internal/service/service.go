@@ -34,6 +34,9 @@ func (s *gatewayService) GetUserID(sessionid string) (int, error) {
 	if err != nil {
 		return 0, errors.Wrap(err, "")
 	}
+	if err := s.rerepo.Expire(fmt.Sprintf("session:%s", sessionid), time.Hour); err != nil {
+		return 0, errors.Wrap(err, "")
+	}
 	if suserid == "" {
 		return 0, errors.Wrap(err, "not found session")
 

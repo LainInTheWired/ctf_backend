@@ -44,6 +44,7 @@ type PVERepository interface {
 	Template(node string, vmid int) error
 	DeleteFile(fname string) error
 	GetNetIntFormQumeAgent(node string, vmid int) ([]model.NetworkIntQumeAgent, error)
+	EditVMACL(vmid int) error
 }
 
 func NewPVERepository(conf *model.PVEConfig, client *http.Client) PVERepository {
@@ -524,7 +525,7 @@ func (r *pveRepository) Boot(node string, vmid int) error {
 
 func (r *pveRepository) Shutdown(node string, vmid int) error {
 	// フォームデータの作成
-	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/status/shutdown", r.pveConf.APIURL, node, vmid)
+	endpoint := fmt.Sprintf("%s/nodes/%s/qemu/%d/status/stop", r.pveConf.APIURL, node, vmid)
 	// フォームデータの作成
 
 	// 新しいPOSTリクエストの作成
@@ -649,4 +650,61 @@ func (r *pveRepository) GetNetIntFormQumeAgent(node string, vmid int) ([]model.N
 		return nil, xerrors.Errorf("json Unmarshal error: %w", err)
 	}
 	return getVMconfig.Data.Result, nil
+}
+
+func (r *pveRepository) EditVMACL(vmid int) error {
+	// フォームデータの作成
+	endpoint := fmt.Sprintf("%s/access/acl", r.pveConf.APIURL)
+	// '!' で分割してユーザー部分を取得
+	parts := strings.Split(r.pveConf.Authorization, "!")
+	// if len(parts) < 2 {
+	// 	("エラー: トークンの形式が無効です。'!' が含まれていません。")
+	// }
+
+	userPart := parts[0]
+	fmt.Println("抽出されたユーザー部分:", userPart)
+
+	// フォームデータの作成
+	formData := url.Values{}
+	formData.Set("path", fmt.Sprintf("vms/%d", vmid))
+	formData.Set("users", userPart)
+	formData.Set("roles", "ctf_dev_vm")
+
+	// 新しいPOSTリクエストの作成
+	req, err := http.NewRequest("PUT", endpoint, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return xerrors.Errorf("can't create http request: %w", err)
+	}
+
+	// ヘッダーの設定
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// リクエストの送信
+	resp, err := r.HTTPClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("fail http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// レスポンスの読み取り
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Error reading clone response body: %v", err)
+	}
+
+	// json.Unmarshalでデコード
+	var pveresp model.ResponsePVE[string]
+	if err := json.Unmarshal(body, &pveresp); err != nil {
+		return xerrors.Errorf("can't unmarshal response body: %w", err)
+	}
+
+	// エラーチェック
+	if resp.StatusCode >= 400 {
+		return xerrors.Errorf("API Error: status code %d, response: %s", resp.StatusCode, resp.Status)
+	}
+
+	// クローン作成のUPIDを表示
+	log.Printf("VM クローンの作成が開始されました。UPID: %s\n", pveresp.Data)
+
+	return nil
 }

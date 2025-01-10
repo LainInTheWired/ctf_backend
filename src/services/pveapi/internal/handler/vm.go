@@ -136,6 +136,7 @@ func (h *PVEHandler) CreateCloudinitVM(c echo.Context) error {
 			Memory:   req.Memory,
 			Cores:    req.CPUs,
 			Node:     node,
+			Ipconfig: []string{"ip=dhcp"},
 			Cicustom: req.Cicustom,
 		}
 	} else {
@@ -311,6 +312,16 @@ func (h *PVEHandler) GetClusterResource(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
 	}
 	return c.JSON(http.StatusOK, cluster)
+}
+
+func (h *PVEHandler) EditVMACL(c echo.Context) error {
+	err := h.serv.EditVMACL()
+	if err != nil {
+		wrappedErr := xerrors.Errorf(": %w", err)
+		log.Errorf("\n%+v\n", wrappedErr) // スタックトレース付きでログに出力
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("error:", wrappedErr)})
+	}
+	return c.JSON(http.StatusOK, "scesss")
 }
 
 // func (h *PVEHandler) GETTestHander(c echo.Context) error {
